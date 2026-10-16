@@ -15,6 +15,7 @@ PAYATHON 2026 参赛项目。比赛规则见上级目录 [`../docs/PROJECT_CONTE
 
 - [产品决策记录](docs/product-decisions.md)：产品形态、模块、流程、收费方式等已确认的决定
 - [支付可行性调研](docs/payment-research.md)
+- [技术方案](docs/tech-plan.md)：技术栈、数据模型、API、MCP、里程碑
 
 ## 初步 MVP 设想（已被决策记录取代）
 
