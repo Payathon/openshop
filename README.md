@@ -17,6 +17,19 @@ PAYATHON 2026 参赛项目。比赛规则见上级目录 [`../docs/PROJECT_CONTE
 - [支付可行性调研](docs/payment-research.md)
 - [技术方案](docs/tech-plan.md)：技术栈、数据模型、API、MCP、里程碑
 
+## 本地运行
+
+需要 Node 26 和 pnpm。数据库默认用进程内的 PGlite，不需要 Docker。
+
+```bash
+pnpm install
+pnpm test            # 全部测试
+pnpm typecheck
+cd apps/server && pnpm dev   # http://localhost:8788，首次启动会建两家演示店并打印商家令牌
+```
+
+现在用的是模拟支付：下单返回的 `paymentUrl` 是一个本地的模拟收银台页面，点"确认付款"即视为付款成功。模拟支付的状态只保存在内存里，服务重启后，之前未付款的订单会被当作过期。
+
 ## 初步 MVP 设想（已被决策记录取代）
 
 1. **一句话开店**：商家和 agent 对话，生成店铺页（H5）+ 专属 MCP endpoint + Skill。
