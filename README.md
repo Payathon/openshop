@@ -11,7 +11,12 @@ PAYATHON 2026 参赛项目。比赛规则见上级目录 [`../docs/PROJECT_CONTE
 - 形态：SaaS，开箱即用的组件。商家不用开发，店是商家自己的，不是平台的。
 - "接进来"的意思：每家店暴露 MCP，agent 能直接操作（查商品/空档、下单、付款）；同时提供 Skill，降低 agent 的学习成本。
 
-## 初步 MVP 设想
+## 文档
+
+- [产品决策记录](docs/product-decisions.md)：产品形态、模块、流程、收费方式等已确认的决定
+- [支付可行性调研](docs/payment-research.md)
+
+## 初步 MVP 设想（已被决策记录取代）
 
 1. **一句话开店**：商家和 agent 对话，生成店铺页（H5）+ 专属 MCP endpoint + Skill。
 2. **Agent 下单**：消费者在自己的 agent 里装上店铺 Skill，查询、下单，并通过支付宝 AI 付完成付款。
