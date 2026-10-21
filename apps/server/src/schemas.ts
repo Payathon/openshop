@@ -58,3 +58,11 @@ export const newOrderSchema = z.object({
   address: addressSchema.optional(),
   source: z.enum(["web", "agent"]).optional(),
 });
+
+export const registerSchema = z.object({
+  name: z.string().trim().min(1, "请填写称呼").max(30),
+  email: z.email("邮箱格式不正确").max(200),
+  password: z.string().min(8, "密码至少 8 位").max(200),
+});
+
+export const loginSchema = z.object({ email: z.string().max(200), password: z.string().max(200) });

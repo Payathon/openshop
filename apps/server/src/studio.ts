@@ -326,6 +326,11 @@ export class Studio {
 
   // ---- operational: immediate, never previewed --------------------------------------------
 
+  async closures(shopId: string) {
+    const [row] = await this.db.select({ schedule: shops.schedule }).from(shops).where(eq(shops.id, shopId));
+    return { closures: row?.schedule?.closures ?? [] };
+  }
+
   // Times the shop is closed on top of its weekly hours, e.g. a day off.
   async setClosures(shopId: string, closures: { start: string; end: string }[]) {
     return this.db.transaction(async (tx) => {

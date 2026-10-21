@@ -5,10 +5,12 @@ import { Buyer } from "@openshop/client/buyer";
 import { createMcpServer } from "@openshop/client/mcp";
 import { MODULES, productInputSchema, TEMPLATES, type OrderStatus } from "@openshop/core";
 import { bodyLimit } from "hono/body-limit";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
+import { Accounts, SESSION_TTL_MS } from "./accounts.ts";
 import { opInputSchema, type OpInput } from "./content.ts";
 import { FakePaymentProvider } from "./payments/fake.ts";
 import type { PaymentProvider } from "./payments/provider.ts";
-import { newOrderSchema, newShopSchema, onboardSchema, scheduleSchema } from "./schemas.ts";
+import { loginSchema, newOrderSchema, newShopSchema, onboardSchema, registerSchema, scheduleSchema } from "./schemas.ts";
 import { OpenShop, ShopError } from "./shop.ts";
 import { LocalDiskStorage, MAX_IMAGE_BYTES, newImageKey, sniffImage, type Storage } from "./storage.ts";
 import { Studio } from "./studio.ts";
@@ -36,6 +38,17 @@ export function createApp(
   const app = new Hono<Env>();
   const { storage } = opts;
   const studio = new Studio(shop, opts);
+  const accounts = new Accounts(shop.db, () => shop.now());
+
+  // The workbench's login: an HttpOnly session cookie for the whole origin.
+  const SESSION_COOKIE = "os_session";
+  const secure = shop.baseUrl.startsWith("https:");
+  const startSession = (c: Context, token: string) =>
+    setCookie(c, SESSION_COOKIE, token, { path: "/", httpOnly: true, sameSite: "Lax", secure, maxAge: SESSION_TTL_MS / 1000 });
+  const sessionAccount = async (c: Context) => {
+    const token = getCookie(c, SESSION_COOKIE);
+    return token ? accounts.fromSession(token) : null;
+  };
 
   app.onError((err, c) => {
     if (err instanceof ShopError) return c.json({ error: err.code, message: err.message }, err.status);
@@ -49,7 +62,16 @@ export function createApp(
 
   // A blank draft shop. Merchants normally start from /api/onboarding instead.
   app.post("/api/shops", async (c) => c.json(await shop.createShop(await body(c, newShopSchema)), 201));
-  app.post("/api/onboarding", async (c) => c.json(await studio.onboard(await body(c, onboardSchema)), 201));
+  // Signed in, the new shop belongs to the account (one shop per account for now). Without a
+  // session it is an API-only shop reached with the returned merchant token.
+  app.post("/api/onboarding", async (c) => {
+    const input = await body(c, onboardSchema);
+    const account = await sessionAccount(c);
+    if (account && (await accounts.shopsOf(account.id)).length > 0) throw new ShopError(409, "has_shop", "这个账号已经有一家店了");
+    const created = await studio.onboard(input);
+    if (account) await accounts.addOwner(account.id, created.shop.id);
+    return c.json(created, 201);
+  });
   app.get("/api/templates", (c) =>
     c.json({
       industries: Object.values(TEMPLATES).map((t) => ({ key: t.key, label: t.label, modules: t.modules })),
@@ -92,12 +114,56 @@ export function createApp(
     return transport.handleRequest(c.req.raw);
   });
 
-  // ---- merchant: bearer token from shop creation --------------------------
+  // ---- merchant accounts ----------------------------------------------------
+
+  app.post("/api/auth/register", async (c) => {
+    const { account, session } = await accounts.register(await body(c, registerSchema));
+    startSession(c, session);
+    return c.json({ account }, 201);
+  });
+
+  app.post("/api/auth/login", async (c) => {
+    const { email, password } = await body(c, loginSchema);
+    const { account, session } = await accounts.login(email, password);
+    startSession(c, session);
+    return c.json({ account });
+  });
+
+  app.post("/api/auth/logout", async (c) => {
+    const token = getCookie(c, SESSION_COOKIE);
+    if (token) await accounts.logout(token);
+    deleteCookie(c, SESSION_COOKIE, { path: "/" });
+    return c.json({ ok: true });
+  });
+
+  app.get("/api/auth/me", async (c) => {
+    const account = await sessionAccount(c);
+    if (!account) throw new ShopError(401, "unauthorized", "请先登录");
+    const [first] = await accounts.shopsOf(account.id);
+    const overview = first ? await studio.overview(first.id) : null;
+    return c.json({
+      account,
+      shop: overview && {
+        id: overview.shop.id,
+        slug: overview.shop.slug,
+        name: overview.shop.name,
+        industry: overview.shop.industry,
+        status: overview.shop.status,
+        url: overview.shop.url,
+      },
+    });
+  });
+
+  // ---- merchant: the workbench session, or the bearer token from shop creation ----------
 
   app.use("/api/merchant/*", async (c, next) => {
     const token = c.req.header("authorization")?.replace(/^Bearer\s+/i, "");
-    const shopId = token ? await shop.authenticate(token) : null;
-    if (!shopId) throw new ShopError(401, "unauthorized", "需要商家令牌");
+    let shopId = token ? await shop.authenticate(token) : null;
+    if (!shopId && !token) {
+      const account = await sessionAccount(c);
+      shopId = account ? ((await accounts.shopsOf(account.id))[0]?.id ?? null) : null;
+    }
+    if (!shopId) throw new ShopError(401, "unauthorized", "请先登录");
     c.set("shopId", shopId);
     await next();
   });
@@ -135,6 +201,7 @@ export function createApp(
 
   // Operational changes take effect immediately.
 
+  app.get("/api/merchant/closures", async (c) => c.json(await studio.closures(c.get("shopId"))));
   app.put("/api/merchant/closures", async (c) => {
     const { closures } = await body(c, z.object({ closures: scheduleSchema.shape.closures }));
     return c.json(await studio.setClosures(c.get("shopId"), closures));
@@ -150,6 +217,8 @@ export function createApp(
     if (status && !(orderStatuses as readonly string[]).includes(status)) throw new ShopError(400, "invalid_request", `未知的订单状态 ${status}`);
     return c.json(await shop.listOrders(c.get("shopId"), status as OrderStatus | undefined));
   });
+
+  app.get("/api/merchant/orders/:id", async (c) => c.json(await shop.merchantOrder(c.get("shopId"), c.req.param("id"))));
 
   app.post("/api/merchant/orders/:id/ship", async (c) => {
     const { trackingNo } = await body(c, z.object({ trackingNo: z.string().min(1).max(50) }));

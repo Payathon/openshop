@@ -25,12 +25,22 @@ PAYATHON 2026 参赛项目。比赛规则见上级目录 [`../docs/PROJECT_CONTE
 
 ```bash
 pnpm install
+pnpm start           # 打包商家后台并启动服务：http://localhost:8788
+pnpm dev             # 开发模式：服务端 8788 + 商家后台热更新 http://localhost:5173/admin/
 pnpm test            # 全部测试
 pnpm typecheck
-cd apps/server && pnpm dev   # http://localhost:8788，首次启动会建两家演示店并打印商家令牌
 ```
 
-店铺网页在 `/s/<店铺地址>`，比如 http://localhost:8788/s/nail-studio（预约）和 http://localhost:8788/s/bakery（快递）。页面由服务端渲染，用手机宽度看效果最好。每家店还提供给 agent 用的 `/s/<店铺地址>/llms.txt` 和 `/s/<店铺地址>/.well-known/openshop.json`。
+打开 http://localhost:8788 会进入商家后台。首次启动会自动准备两个账号，密码都是 `openshop123`：
+
+| 账号 | 状态 | 用来做什么 |
+|---|---|---|
+| `demo@openshop.dev` | 已经走完注册、开店表单、换商品、装修、发布的全流程，有几笔订单 | 看一家建好的店：后台各页面，以及它的店铺网站 http://localhost:8788/s/moon-nail |
+| `try@openshop.dev` | 只注册了，还没有店 | 自己从开店向导开始体验。也可以在登录页点“免费开店”注册新账号 |
+
+数据存在 `apps/server/.data/`，删掉这个目录就能从头再来。
+
+店铺网页在 `/s/<店铺地址>`，比如 http://localhost:8788/s/moon-nail。另外还有两家只能用 API 管理的演示店：http://localhost:8788/s/nail-studio（预约）和 http://localhost:8788/s/bakery（快递），CLI 和 Skill 的例子用的是它们。页面由服务端渲染，用手机宽度看效果最好。每家店还提供给 agent 用的 `/s/<店铺地址>/llms.txt` 和 `/s/<店铺地址>/.well-known/openshop.json`。
 
 ### 让 agent 来下单
 

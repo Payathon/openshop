@@ -1,4 +1,4 @@
-# The OpenShop server: API, /mcp, shop pages. Built from the repo root because the server
+# The OpenShop server: API, /mcp, shop pages and the merchant workbench. Built from the repo root because the server
 # imports the workspace packages (core, client) as TypeScript source.
 #
 # It runs the sources with tsx instead of a compiled build: the workspace packages export .ts
@@ -16,10 +16,21 @@ COPY packages/client/package.json packages/client/
 # Only the server and the packages it depends on; dev dependencies include tsx and PGlite.
 RUN pnpm install --frozen-lockfile --filter @openshop/server...
 
+# The merchant workbench (apps/web), built to static files the server serves under /admin.
+FROM node:26-slim AS web
+WORKDIR /app
+RUN npm install -g pnpm@11.10.0
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY apps/web/package.json apps/web/
+RUN pnpm install --frozen-lockfile --filter @openshop/web
+COPY apps/web apps/web
+RUN pnpm --filter @openshop/web build
+
 FROM node:26-slim
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=deps /app /app
+COPY --from=web /app/apps/web/dist apps/web/dist
 COPY packages/core packages/core
 COPY packages/client packages/client
 COPY apps/server apps/server

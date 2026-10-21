@@ -188,3 +188,4 @@ export const publishes = pgTable(
   },
   (t) => [uniqueIndex("publishes_shop_version_idx").on(t.shopId, t.version)],
 );
+export * from "./accounts.ts";

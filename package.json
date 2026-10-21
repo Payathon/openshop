@@ -3,6 +3,8 @@
   "private": true,
   "packageManager": "pnpm@11.10.0",
   "scripts": {
+    "start": "pnpm --filter @openshop/web build && pnpm --filter @openshop/server start",
+    "dev": "pnpm --parallel --filter @openshop/server --filter @openshop/web dev",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"
   }

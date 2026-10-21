@@ -523,6 +523,13 @@ export class OpenShop {
     return Promise.all(rows.map((o) => this.renderOrder(o)));
   }
 
+  // One order, refreshed from the payment provider so the merchant sees a payment at once.
+  async merchantOrder(shopId: string, orderId: string) {
+    const [o] = await this.db.select().from(orders).where(and(eq(orders.id, orderId), eq(orders.shopId, shopId)));
+    if (!o) throw new ShopError(404, "order_not_found", "找不到这个订单");
+    return this.renderOrder(await this.refreshOrder(o));
+  }
+
   async shipOrder(shopId: string, orderId: string, trackingNo: string) {
     // Paid moments ago and not yet swept: learn about it now rather than refuse to ship.
     const [current] = await this.db.select().from(orders).where(and(eq(orders.id, orderId), eq(orders.shopId, shopId)));

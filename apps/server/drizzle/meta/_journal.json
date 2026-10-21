@@ -22,6 +22,13 @@
       "when": 1792624585630,
       "tag": "0002_lowly_true_believers",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792624669742,
+      "tag": "0003_futuristic_black_queen",
+      "breakpoints": true
     }
   ]
 }
