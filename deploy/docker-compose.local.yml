@@ -1,0 +1,7 @@
+# Tries the production stack on a laptop over plain HTTP, without a domain:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml --env-file .env.local.example up -d --build
+# then open http://localhost:8080/s/nail-studio.
+services:
+  caddy:
+    ports: !override
+      - "8080:80"

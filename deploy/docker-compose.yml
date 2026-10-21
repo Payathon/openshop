@@ -1,0 +1,91 @@
+# OpenShop on one machine: Caddy (HTTPS) → app → Postgres, plus a daily backup.
+# Run from this directory with a filled-in .env (copy .env.example):
+#   docker compose up -d --build
+# See docs/deploy.md.
+
+name: openshop
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      OPENSHOP_DOMAIN: ${OPENSHOP_DOMAIN:?set OPENSHOP_DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: openshop-app
+    restart: unless-stopped
+    init: true
+    # main.ts finishes the payment sweep and open requests within 8s of SIGTERM.
+    stop_grace_period: 15s
+    environment:
+      PUBLIC_URL: ${PUBLIC_URL:?set PUBLIC_URL in .env}
+      DATABASE_URL: postgres://openshop:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/openshop
+      PAYMENT_SYNC_MS: ${PAYMENT_SYNC_MS:-10000}
+      SEED: ${SEED:-1}
+    volumes:
+      - uploads:/data/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: &logging
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: openshop
+      POSTGRES_DB: openshop
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "openshop", "-d", "openshop"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging: *logging
+
+  # Dumps the database once a day into ./backups on the host, keeping BACKUP_KEEP_DAYS days.
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/backup.sh"]
+    environment:
+      PGHOST: postgres
+      PGUSER: openshop
+      PGDATABASE: openshop
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_HOUR_UTC: ${BACKUP_HOUR_UTC:-19}
+    volumes:
+      - ./backup.sh:/backup.sh:ro
+      - ./backups:/backups
+      # Uploaded images are backed up alongside the database (read-only).
+      - uploads:/uploads:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *logging
+
+volumes:
+  pgdata:
+  uploads:
+  caddy_data:
+  caddy_config:
