@@ -117,3 +117,12 @@ export const customers = pgTable(
   },
   (t) => [uniqueIndex("customers_shop_phone_idx").on(t.shopId, t.phone)],
 );
+
+// Short leases on background jobs, so only one app instance runs a job at a time.
+// A row rather than a Postgres advisory lock: it works on any pooled connection and in PGlite,
+// and a crashed holder's lease simply expires.
+export const leases = pgTable("leases", {
+  name: text("name").primaryKey(),
+  holder: text("holder").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});

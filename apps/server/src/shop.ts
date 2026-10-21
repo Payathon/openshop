@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { and, asc, desc, eq, gt, gte, inArray, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, lt, lte, or, sql } from "drizzle-orm";
 import {
   availableSlots,
   canTransition,
@@ -14,12 +14,16 @@ import {
   type ProductInput,
 } from "@openshop/core";
 import type { Db } from "./db/client.ts";
+import { acquireLease, releaseLease } from "./db/lease.ts";
 import { customers, orderItems, orders, products, shops, variants, type Address, type StoredSchedule } from "./db/schema.ts";
 import type { PaymentProvider } from "./payments/provider.ts";
 
+// A sweep normally takes well under this; if an instance dies mid-sweep, another takes over after it.
+const SWEEP_LEASE_MS = 60_000;
+
 export class ShopError extends Error {
   constructor(
-    readonly status: 400 | 401 | 404 | 409 | 502,
+    readonly status: 400 | 401 | 404 | 409 | 413 | 415 | 502,
     readonly code: string,
     message: string,
   ) {
@@ -306,7 +310,7 @@ export class OpenShop {
 
   async availability(slug: string, variantId: string, date?: string) {
     const shop = await this.shopBySlug(slug);
-    await this.refreshPending(shop.id);
+    await this.settleExpired(shop.id);
     const { product, variant } = await this.sellable(shop.id, variantId);
     if (product.fulfillment === "shipping") return { fulfillment: "shipping" as const, stock: variant.stock ?? 0 };
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new ShopError(400, "invalid_request", "预约类商品需要 date 参数，格式 YYYY-MM-DD");
@@ -362,7 +366,7 @@ export class OpenShop {
 
   async createOrder(slug: string, input: NewOrder) {
     const shop = await this.shopBySlug(slug);
-    await this.refreshPending(shop.id);
+    await this.settleExpired(shop.id);
     if (input.items.length === 0) throw new ShopError(400, "invalid_request", "订单里没有商品");
 
     const lines: { product: ProductRow; variant: VariantRow; quantity: number; options: Record<string, string> }[] = [];
@@ -486,12 +490,41 @@ export class OpenShop {
   }
 
   // ---- payment sync -----------------------------------------------------
-  // Without a public notify_url we learn about payments by asking. Every read path that
-  // depends on order state refreshes pending orders first.
+  // Without a public notify_url we learn about payments by asking. A background sweep
+  // (syncPayments, run by jobs.ts) asks about every unpaid order. On top of that:
+  // - a customer reading or cancelling their own order refreshes just that order;
+  // - stock and slot reads first settle the shop's *expired* holds, so a timed-out order never
+  //   blocks a sale while waiting for the sweep. Only expired orders are asked about there,
+  //   which keeps calls to the payment provider off the hot path.
+  // A merchant may see a just-paid order as unpaid for up to one sweep interval.
 
-  private async refreshPending(shopId: string) {
-    const pending = await this.db.select().from(orders).where(and(eq(orders.shopId, shopId), eq(orders.status, "pending_payment")));
-    for (const o of pending) await this.refreshOrder(o);
+  // Returns how many orders were checked, or null when another sweep holds the lease.
+  async syncPayments(opts: { holder?: string; batch?: number } = {}): Promise<number | null> {
+    const holder = opts.holder ?? newId("sweep");
+    if (!(await acquireLease(this.db, "payment-sync", holder, this.clock(), SWEEP_LEASE_MS))) return null;
+    try {
+      const pending = await this.db
+        .select()
+        .from(orders)
+        .where(eq(orders.status, "pending_payment"))
+        .orderBy(asc(orders.paymentExpiresAt))
+        .limit(opts.batch ?? 500);
+      for (const o of pending) {
+        // One order's provider error mustn't stop the rest; the next sweep retries it.
+        await this.refreshOrder(o).catch((err: unknown) => console.error(`payment sync: order ${o.id}:`, err));
+      }
+      return pending.length;
+    } finally {
+      await releaseLease(this.db, "payment-sync", holder);
+    }
+  }
+
+  private async settleExpired(shopId: string) {
+    const expired = await this.db
+      .select()
+      .from(orders)
+      .where(and(eq(orders.shopId, shopId), eq(orders.status, "pending_payment"), lte(orders.paymentExpiresAt, this.clock())));
+    for (const o of expired) await this.refreshOrder(o);
   }
 
   private async refreshOrder(order: OrderRow): Promise<OrderRow> {
@@ -562,7 +595,7 @@ export class OpenShop {
   // ---- merchant ---------------------------------------------------------
 
   async listOrders(shopId: string, status?: OrderStatus) {
-    await this.refreshPending(shopId);
+    await this.settleExpired(shopId);
     const rows = await this.db
       .select()
       .from(orders)
@@ -572,7 +605,9 @@ export class OpenShop {
   }
 
   async shipOrder(shopId: string, orderId: string, trackingNo: string) {
-    await this.refreshPending(shopId);
+    // Paid moments ago and not yet swept: learn about it now rather than refuse to ship.
+    const [current] = await this.db.select().from(orders).where(and(eq(orders.id, orderId), eq(orders.shopId, shopId)));
+    if (current) await this.refreshOrder(current);
     return this.db.transaction(async (tx) => {
       const [o] = await tx.select().from(orders).where(and(eq(orders.id, orderId), eq(orders.shopId, shopId))).for("update");
       if (!o) throw new ShopError(404, "order_not_found", "找不到这个订单");
@@ -583,7 +618,6 @@ export class OpenShop {
   }
 
   async listCustomers(shopId: string) {
-    await this.refreshPending(shopId);
     return this.db
       .select({
         id: customers.id,

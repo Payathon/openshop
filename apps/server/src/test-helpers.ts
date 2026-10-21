@@ -1,7 +1,11 @@
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createApp } from "./app.ts";
 import { connectPglite } from "./db/client.ts";
 import { FakePaymentProvider } from "./payments/fake.ts";
 import { OpenShop } from "./shop.ts";
+import { LocalDiskStorage } from "./storage.ts";
 
 export const BASE = "http://openshop.test";
 
@@ -18,8 +22,10 @@ export const nailSchedule = {
 export async function setup() {
   let now = START;
   const payments = new FakePaymentProvider(BASE);
-  const shop = new OpenShop({ db: await connectPglite(), payments, clock: () => now, baseUrl: BASE });
-  const app = createApp(shop, payments);
+  const db = await connectPglite();
+  const shop = new OpenShop({ db, payments, clock: () => now, baseUrl: BASE });
+  const storage = new LocalDiskStorage(await mkdtemp(join(tmpdir(), "openshop-uploads-")), `${BASE}/files`);
+  const app = createApp(shop, payments, { storage });
 
   async function call(method: string, path: string, opts: { token?: string; orderToken?: string; body?: unknown } = {}) {
     const res = await app.request(`${BASE}${path}`, {
@@ -98,6 +104,7 @@ export async function setup() {
   }
 
   return {
+    db,
     shop,
     app,
     payments,
