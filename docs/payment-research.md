@@ -42,7 +42,15 @@
 - 首次签约收单产品未满 90 天的商家，资金次日结算。
 - 文档站 `/docs/vibe-pay/ai-web-app-payment-qianyi/ai-web-app-payment-integration-guide` 页面目前挂错了内容（显示的是智能眼镜文档），电脑网站支付的签约细节需要去支付宝开放平台（`opendocs.alipay.com`）查。
 
-## 待确认
+## 决定（2026-10-21）
+
+- 黑客松阶段，**假设支付宝的各项能力都能开通**，包括个人账号签约、服务商模式、类目限制。下面"待确认"里的问题不阻塞开发
+- 主要场景只有两个，底层都是电脑网站支付（`alipay.trade.page.pay`），所以同一个 `AlipayPagePayProvider` 两边都能用：
+  - **Agent Pay**：消费者的 agent 下单，把收银台链接交给支付宝的支付 Skill 付款（见上面第 1 节的 skillpay 流程）
+  - **Vibe Pay**：消费者在店铺网页上下单，跳转到支付宝收银台付款（文档 `/docs/vibe-pay/ai-web-app-payment-qianyi/ai-web-app-payment-integration-guide.md`）
+- Token Pay（专业版订阅，M7）不是主线，放到最后
+
+## 待确认（不阻塞）
 
 - 个人支付宝账号签约电脑网站支付后，能否收实物和预约服务的款
 - 服务商模式下，商家授权的具体流程，以及我们的应用需要什么资质
