@@ -28,6 +28,22 @@ pnpm typecheck
 cd apps/server && pnpm dev   # http://localhost:8788，首次启动会建两家演示店并打印商家令牌
 ```
 
+### 让 agent 来下单
+
+消费者这一侧有三种接入方式，用的是同一套工具：
+
+- **CLI 加 Skill**（Claude Code 等桌面 agent 推荐用这个）：
+
+  ```bash
+  pnpm --filter @openshop/cli build
+  ln -s "$PWD/packages/cli/dist/openshop.mjs" ~/.local/bin/openshop   # 放到 PATH 里的任意目录
+  cp -r skill/openshop ~/.claude/skills/
+  ```
+
+  然后在 Claude Code 里说"帮我约 http://localhost:8788/s/nail-studio 周六下午做个法式"。`openshop --help` 可以查看全部命令。消费者的称呼、手机号、地址和订单凭证保存在 `~/.openshop`。
+- **本地 MCP**：`openshop mcp`（stdio），比 Skill 多了 `profile_get` 和 `profile_save`。
+- **远程 MCP**：服务端的 `/mcp`（Streamable HTTP），不需要登录。因为没有本地存储，agent 要自己保存下单时返回的 `accessToken`。
+
 现在用的是模拟支付：下单返回的 `paymentUrl` 是一个本地的模拟收银台页面，点"确认付款"即视为付款成功。模拟支付的状态只保存在内存里，服务重启后，之前未付款的订单会被当作过期。
 
 ## 初步 MVP 设想（已被决策记录取代）
