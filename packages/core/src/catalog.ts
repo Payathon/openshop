@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { imageUrl } from "./page.ts";
 
 // A product is sold one of three ways; the fulfillment decides what an order must carry.
 // booking: a time slot. shipping: a delivery address. pickup is planned but not built.
@@ -34,7 +35,7 @@ export const variantInputSchema = z.object({
 export const productInputSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(2000).default(""),
-  images: z.array(z.string()).default([]),
+  images: z.array(imageUrl).max(9).default([]),
   fulfillment: z.enum(fulfillments),
   durationMinutes: z.number().int().positive().nullable().default(null),
   orderOptions: z.array(orderOptionSchema).default([]),
