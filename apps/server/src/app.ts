@@ -4,10 +4,12 @@ import { z } from "zod";
 import { Buyer } from "@openshop/client/buyer";
 import { createMcpServer } from "@openshop/client/mcp";
 import { productInputSchema, type OrderStatus } from "@openshop/core";
+import { bodyLimit } from "hono/body-limit";
 import { FakePaymentProvider } from "./payments/fake.ts";
 import type { PaymentProvider } from "./payments/provider.ts";
 import { newOrderSchema, newShopSchema } from "./schemas.ts";
 import { OpenShop, ShopError } from "./shop.ts";
+import { LocalDiskStorage, MAX_IMAGE_BYTES, newImageKey, sniffImage, type Storage } from "./storage.ts";
 import { shopSite } from "./web/site.tsx";
 
 type Env = { Variables: { shopId: string } };
@@ -23,8 +25,9 @@ async function body<T extends z.ZodType>(c: Context, schema: T): Promise<z.infer
 
 const orderStatuses = ["pending_payment", "confirmed", "paid", "shipped", "completed", "cancelled", "expired"] as const;
 
-export function createApp(shop: OpenShop, payments: PaymentProvider) {
+export function createApp(shop: OpenShop, payments: PaymentProvider, opts: { storage?: Storage } = {}) {
   const app = new Hono<Env>();
+  const { storage } = opts;
 
   app.onError((err, c) => {
     if (err instanceof ShopError) return c.json({ error: err.code, message: err.message }, err.status);
@@ -109,6 +112,42 @@ export function createApp(shop: OpenShop, payments: PaymentProvider) {
   });
 
   app.get("/api/merchant/customers", async (c) => c.json(await shop.listCustomers(c.get("shopId"))));
+
+  // ---- uploads ------------------------------------------------------------
+  // The raw image is the request body (curl --data-binary @a.jpg -H 'content-type: image/jpeg'),
+  // which an agent or the workbench can send without multipart encoding.
+
+  if (storage) {
+    app.post(
+      "/api/merchant/uploads",
+      bodyLimit({
+        maxSize: MAX_IMAGE_BYTES,
+        onError: () => {
+          throw new ShopError(413, "too_large", `图片不能超过 ${MAX_IMAGE_BYTES / 1024 / 1024} MB`);
+        },
+      }),
+      async (c) => {
+        const data = new Uint8Array(await c.req.arrayBuffer());
+        const type = sniffImage(data);
+        if (!type) throw new ShopError(415, "unsupported_type", "只支持 JPG、PNG、WebP、GIF 图片");
+        const key = newImageKey(c.get("shopId"), type);
+        await storage.put(key, data, type);
+        return c.json({ key, url: storage.url(key) }, 201);
+      },
+    );
+  }
+
+  if (storage instanceof LocalDiskStorage) {
+    app.get("/files/*", async (c) => {
+      const file = await storage.read(c.req.path.slice("/files/".length));
+      if (!file) return c.text("not found", 404);
+      return c.body(file.data, 200, {
+        "content-type": file.contentType,
+        "cache-control": "public, max-age=31536000, immutable",
+        "x-content-type-options": "nosniff",
+      });
+    });
+  }
 
   // ---- dev: fake cashier --------------------------------------------------
 

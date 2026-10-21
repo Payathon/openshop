@@ -5,6 +5,11 @@ import { fileStore, openshopHome } from "./store.ts";
 
 export const VERSION = "0.1.0";
 
+// Baked in by build.mjs from OPENSHOP_DEFAULT_SERVER (the production URL for the npm release);
+// unset in dev and tests, where the local server is the default.
+declare const OPENSHOP_DEFAULT_SERVER: string | undefined;
+const DEFAULT_SERVER = typeof OPENSHOP_DEFAULT_SERVER === "string" ? OPENSHOP_DEFAULT_SERVER : "http://localhost:8788";
+
 const HELP = `openshop — browse OpenShop stores, book or buy, and follow your orders
 
 Shops (<shop> is a share link like https://…/s/nail-studio, or a slug)
@@ -55,7 +60,7 @@ export async function main(argv: string[]) {
   const [cmd, a, b] = positionals;
   if (!cmd || values.help) return console.log(HELP);
 
-  const server = values.server ?? process.env.OPENSHOP_SERVER ?? "http://localhost:8788";
+  const server = values.server ?? process.env.OPENSHOP_SERVER ?? DEFAULT_SERVER;
   if (cmd === "mcp") return serveMcp(server);
 
   const store = fileStore();

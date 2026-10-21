@@ -1,0 +1,23 @@
+# The platform: shop pages at /s/<slug>, the API, /mcp, the merchant workbench.
+# Caddy gets and renews the certificate itself (HTTP-01); ports 80 and 443 must be open.
+{$OPENSHOP_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:8788
+}
+
+# Shop subdomains (<slug>.openshop.example) — not used yet: the app routes by path only.
+# A wildcard certificate needs the DNS-01 challenge, which needs a Caddy build with the DNS
+# provider's module. For Alibaba Cloud DNS that is github.com/caddy-dns/alidns (build with
+# `xcaddy build --with github.com/caddy-dns/alidns`, or use Cloudflare DNS and caddy-dns/cloudflare),
+# plus an AccessKey that may edit the domain's records. Then uncomment:
+#
+# *.{$OPENSHOP_DOMAIN} {
+# 	tls {
+# 		dns alidns {
+# 			access_key_id {env.ALIDNS_ACCESS_KEY_ID}
+# 			access_key_secret {env.ALIDNS_ACCESS_KEY_SECRET}
+# 		}
+# 	}
+# 	encode zstd gzip
+# 	reverse_proxy app:8788
+# }

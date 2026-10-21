@@ -17,6 +17,7 @@ PAYATHON 2026 参赛项目。比赛规则见上级目录 [`../docs/PROJECT_CONTE
 - [支付可行性调研](docs/payment-research.md)
 - [技术方案](docs/tech-plan.md)：技术栈、数据模型、API、MCP、里程碑
 - [开发中自行决定的事项](docs/dev-notes.md)：MVP 阶段的实现细节和发布前要改的地方
+- [部署手册](docs/deploy.md)：服务器和域名的准备、首次部署、更新、日志、备份与恢复
 
 ## 本地运行
 
