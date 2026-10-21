@@ -106,7 +106,8 @@ export class OpenShopClient {
       },
       ...(opts.body === undefined ? {} : { body: JSON.stringify(opts.body) }),
     }).catch((err: Error) => {
-      const cause = err.cause instanceof Error ? err.cause.message : err.message;
+      // A refused connection is an AggregateError with an empty message but a code.
+      const cause = err.cause instanceof Error ? (err.cause as NodeJS.ErrnoException).code || err.cause.message : err.message;
       throw new ApiError(0, "unreachable", `连不上 ${this.server}（${cause}）`);
     });
     const text = await res.text();
