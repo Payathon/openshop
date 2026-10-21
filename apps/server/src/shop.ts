@@ -402,6 +402,35 @@ export class OpenShop {
     return this.renderOrder(updated);
   }
 
+  // The merchant can cancel any order that hasn't shipped or ended, outside the customer's
+  // cancellation window too (they agreed with the customer); a paid order is refunded in full.
+  async merchantCancelOrder(shopId: string, orderId: string): Promise<RenderedOrder> {
+    const [found] = await this.db.select().from(orders).where(and(eq(orders.id, orderId), eq(orders.shopId, shopId)));
+    if (!found) throw new ShopError(404, "order_not_found", "找不到这个订单");
+    const order = await this.refreshOrder(found);
+    if (!canTransition(order.status, "cancelled")) {
+      throw new ShopError(409, "cancel_not_allowed", order.status === "shipped" ? "订单已发货，不能取消" : "订单已经结束了");
+    }
+    if (order.status === "pending_payment") {
+      await this.payments.closePayment(order.id);
+      if ((await this.payments.queryPayment(order.id)) === "paid") return this.merchantCancelOrder(shopId, orderId);
+      return this.renderOrder(await this.finish(order, "cancelled"));
+    }
+    await this.payments.refund({ orderId: order.id, amountFen: fen(order.totalFen) });
+    return this.renderOrder(await this.finish(order, "cancelled", { refunded: true }));
+  }
+
+  // A booking that has taken place, or a delivered parcel.
+  async completeOrder(shopId: string, orderId: string): Promise<RenderedOrder> {
+    return this.db.transaction(async (tx) => {
+      const [o] = await tx.select().from(orders).where(and(eq(orders.id, orderId), eq(orders.shopId, shopId))).for("update");
+      if (!o) throw new ShopError(404, "order_not_found", "找不到这个订单");
+      if (!canTransition(o.status, "completed")) throw new ShopError(409, "invalid_status", "只有已预约或已发货的订单可以标记完成");
+      const [done] = await tx.update(orders).set({ status: "completed" }).where(eq(orders.id, orderId)).returning();
+      return this.renderOrder(done!, tx as unknown as Db);
+    });
+  }
+
   private async orderForCustomer(orderId: string, accessToken: string) {
     const [o] = await this.db.select().from(orders).where(eq(orders.id, orderId));
     if (!o || o.accessTokenHash !== sha256(accessToken)) throw new ShopError(404, "order_not_found", "找不到这个订单");

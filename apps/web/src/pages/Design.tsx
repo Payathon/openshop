@@ -366,7 +366,7 @@ function PhonePreview(props: { url: string }) {
   }, [revision, props.url]);
 
   return (
-    <div className="phone-wrap">
+    <div className="phone-wrap only-wide">
       <div className="phone">
         <iframe ref={frame} title="店铺预览" />
       </div>
@@ -381,7 +381,15 @@ export function Design() {
   const { overview } = useStudio();
   if (!overview) return <Page title="店铺装修"><Empty>加载中…</Empty></Page>;
   return (
-    <Page title="店铺装修" badge={<Badge>改动发布后生效</Badge>}>
+    <Page
+      title="店铺装修"
+      badge={<Badge>改动发布后生效</Badge>}
+      actions={
+        <a className="btn only-narrow" href={overview.previewUrl} target="_blank" rel="noreferrer">
+          预览店铺
+        </a>
+      }
+    >
       <div className="design">
         <div className="col">
           <ThemeCard theme={overview.page.theme} />

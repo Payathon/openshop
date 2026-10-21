@@ -80,7 +80,26 @@ export function Orders() {
         ) : shown.length === 0 ? (
           <Empty>{filter === "todo" ? "没有待处理的订单" : "这里还没有订单"}</Empty>
         ) : (
-          <div style={{ overflowX: "auto" }}>
+          <>
+          <div className="list only-narrow">
+            {shown.map((o) => (
+              <button key={o.id} className="list-row" onClick={() => navigate(`/orders/${o.id}`)}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="row between">
+                    <strong>{o.customer.name}</strong>
+                    <span>{yuan(o.totalFen)}</span>
+                  </div>
+                  <div>{itemsText(o)}</div>
+                  <div className="subtle">{whenText(o)}</div>
+                  <div className="row" style={{ marginTop: 4 }}>
+                    <StatusBadge status={o.status} />
+                    <SourceBadge source={o.source} />
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+          <div className="only-wide" style={{ overflowX: "auto" }}>
             <table className="table">
               <thead>
                 <tr>
@@ -112,6 +131,7 @@ export function Orders() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </Card>
     </Page>
@@ -128,10 +148,7 @@ export function OrderDetail() {
 
   const load = useCallback(async () => {
     try {
-      const all = await get<Order[]>("/api/merchant/orders");
-      const o = all.find((x) => x.id === id);
-      if (!o) setError("找不到这个订单");
-      setOrder(o ?? null);
+      setOrder(await get<Order>(`/api/merchant/orders/${id}`));
     } catch (e) {
       setError(message(e));
     }
@@ -143,6 +160,19 @@ export function OrderDetail() {
     try {
       setOrder(await post<Order>(`/api/merchant/orders/${id}/ship`, { trackingNo }));
       toast("已标记发货");
+    } catch (e) {
+      toast(message(e), { critical: true });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function act(action: "cancel" | "complete", ask: string, done: string) {
+    if (!confirm(ask)) return;
+    setBusy(true);
+    try {
+      setOrder(await post<Order>(`/api/merchant/orders/${id}/${action}`));
+      toast(done);
     } catch (e) {
       toast(message(e), { critical: true });
     } finally {
@@ -171,9 +201,9 @@ export function OrderDetail() {
                 <div key={n} className="row between" style={{ padding: "8px 0" }}>
                   <div>
                     <div>{i.productName}</div>
-                    <div className="subtle">
-                      {[...Object.values(i.attributes), ...Object.entries(i.options).map(([, v]) => v)].join(" · ") || "默认规格"}
-                    </div>
+                    {(Object.keys(i.attributes).length > 0 || Object.keys(i.options).length > 0) && (
+                      <div className="subtle">{[...Object.values(i.attributes), ...Object.values(i.options)].join(" · ")}</div>
+                    )}
                   </div>
                   <div className="num">
                     {yuan(i.unitFen)} × {i.quantity}
@@ -230,6 +260,35 @@ export function OrderDetail() {
               </div>
             )}
           </Card>
+          {["pending_payment", "confirmed", "paid", "shipped"].includes(order.status) && (
+            <Card title="处理">
+              <div className="stack" style={{ gap: 8 }}>
+                {(order.status === "confirmed" || order.status === "shipped") && (
+                  <button className="btn" disabled={busy} onClick={() => void act("complete", "把这个订单标记为已完成？", "已标记完成")}>
+                    {order.status === "confirmed" ? "顾客已到店，标记完成" : "顾客已收货，标记完成"}
+                  </button>
+                )}
+                {order.status !== "shipped" && (
+                  <button
+                    className="btn critical"
+                    disabled={busy}
+                    onClick={() =>
+                      void act(
+                        "cancel",
+                        order.status === "pending_payment" ? "取消这个订单？顾客将不能再付款。" : `取消这个订单并全额退款 ${yuan(order.totalFen)}？`,
+                        order.status === "pending_payment" ? "订单已取消" : "订单已取消，款项原路退回",
+                      )
+                    }
+                  >
+                    {order.status === "pending_payment" ? "取消订单" : `取消并退款 ${yuan(order.totalFen)}`}
+                  </button>
+                )}
+                {order.status !== "shipped" && order.status !== "pending_payment" && (
+                  <p className="subtle">和顾客商量好再取消。退款原路退回，顾客会看到订单已取消。</p>
+                )}
+              </div>
+            </Card>
+          )}
           <Card title="记录">
             <div className="stack" style={{ gap: 4 }}>
               <div className="subtle">下单：{dateTime(order.createdAt)}</div>

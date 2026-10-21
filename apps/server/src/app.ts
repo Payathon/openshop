@@ -220,6 +220,9 @@ export function createApp(
 
   app.get("/api/merchant/orders/:id", async (c) => c.json(await shop.merchantOrder(c.get("shopId"), c.req.param("id"))));
 
+  app.post("/api/merchant/orders/:id/cancel", async (c) => c.json(await shop.merchantCancelOrder(c.get("shopId"), c.req.param("id"))));
+  app.post("/api/merchant/orders/:id/complete", async (c) => c.json(await shop.completeOrder(c.get("shopId"), c.req.param("id"))));
+
   app.post("/api/merchant/orders/:id/ship", async (c) => {
     const { trackingNo } = await body(c, z.object({ trackingNo: z.string().min(1).max(50) }));
     return c.json(await shop.shipOrder(c.get("shopId"), c.req.param("id"), trackingNo));
@@ -268,24 +271,22 @@ export function createApp(
   if (payments instanceof FakePaymentProvider) {
     app.get("/dev/fake-pay/:orderId", (c) => {
       const p = payments.get(c.req.param("orderId"));
-      if (!p) return c.text("unknown payment", 404);
-      const yuan = (p.amountFen / 100).toFixed(2);
-      return c.html(
-        `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">` +
-          `<title>模拟支付</title><body style="font-family:system-ui;max-width:420px;margin:48px auto;padding:0 16px">` +
-          `<h1>模拟支付宝收银台</h1><p>${escapeHtml(p.subject)}</p><p style="font-size:28px">¥${yuan}</p>` +
-          (p.state === "pending"
-            ? `<form method="post"><button style="font-size:18px;padding:10px 24px">确认付款</button></form>`
-            : `<p>状态：${p.state === "paid" ? "已付款" : "已关闭"}</p>`),
-      );
+      if (!p) return c.html(cashierPage("找不到这笔付款", `<p class="muted">链接可能已经失效。</p>`), 404);
+      const amount = (p.amountFen / 100).toFixed(2);
+      const body =
+        `<p class="muted">${escapeHtml(p.subject)}</p><p class="amount"><small>¥</small>${amount}</p>` +
+        (p.state === "pending"
+          ? `<form method="post"><button>确认付款</button></form>`
+          : `<p class="state">${p.state === "paid" ? "已付款" : "这笔付款已关闭"}</p>`);
+      return c.html(cashierPage("支付宝收银台", body));
     });
     app.post("/dev/fake-pay/:orderId", (c) => {
       const orderId = c.req.param("orderId");
-      if (!payments.complete(orderId)) return c.text("payment closed", 409);
+      if (!payments.complete(orderId)) return c.html(cashierPage("付款已关闭", `<p class="muted">订单已经超时或取消，请回到店铺重新下单。</p>`), 409);
       // Like Alipay's return_url: web orders go back to the shop's order page.
       const returnUrl = payments.get(orderId)?.returnUrl;
       if (returnUrl) return c.redirect(returnUrl, 303);
-      return c.html(`<!doctype html><meta charset="utf-8"><p>付款成功，可以回到对话或订单页面了。</p>`);
+      return c.html(cashierPage("付款成功", `<p class="ok">✓</p><p>付款成功。回到和 AI 助手的对话，告诉它“付好了”。</p>`));
     });
   }
 
@@ -293,3 +294,18 @@ export function createApp(
 }
 
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
+
+// The local stand-in for Alipay's cashier. Clearly marked as a test so nobody mistakes it.
+const cashierPage = (title: string, body: string) =>
+  `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">` +
+  `<link rel="icon" href="data:,"><title>${title}</title><style>` +
+  `body{margin:0;background:#f5f6f7;font:15px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color:#1a1a1a}` +
+  `header{background:#1677ff;color:#fff;padding:14px 16px;font-weight:600;display:flex;align-items:center;gap:8px}` +
+  `header span{margin-left:auto;font-size:12px;font-weight:500;background:rgba(255,255,255,.2);padding:2px 8px;border-radius:999px}` +
+  `main{max-width:420px;margin:24px auto;padding:0 16px}` +
+  `.card{background:#fff;border-radius:12px;padding:24px 20px;text-align:center;box-shadow:0 1px 2px rgba(0,0,0,.05)}` +
+  `.muted{color:#666;margin:0}.amount{font-size:40px;font-weight:600;margin:12px 0 24px}.amount small{font-size:22px;margin-right:2px}` +
+  `button{width:100%;height:48px;border:none;border-radius:10px;background:#1677ff;color:#fff;font-size:17px;font-weight:600;cursor:pointer}` +
+  `.state{color:#666}.ok{font-size:44px;color:#1677ff;margin:0}.note{text-align:center;color:#999;font-size:12px;margin-top:16px}` +
+  `</style><header>支付宝<span>模拟收银台</span></header><main><div class="card">${body}</div>` +
+  `<p class="note">本地测试用，不会真的扣款</p></main></html>`;
