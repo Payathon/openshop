@@ -1,9 +1,10 @@
 /** @jsxImportSource hono/jsx */
 import { presentOrder } from "@openshop/client/buyer";
+import type { CancelDecision, Theme } from "@openshop/core";
 import type { RenderedOrder } from "../shop.ts";
 import type { ShopUrls } from "./discovery.ts";
 import { Layout, price, variantLabel, type PublicShop } from "./layout.tsx";
-import { ORDER_SCRIPT } from "./scripts.ts";
+import { CANCEL_SCRIPT, ORDER_SCRIPT } from "./scripts.ts";
 
 const TONE: Record<RenderedOrder["status"], "ok" | "warn" | "bad"> = {
   pending_payment: "warn",
@@ -15,12 +16,40 @@ const TONE: Record<RenderedOrder["status"], "ok" | "warn" | "bad"> = {
   expired: "bad",
 };
 
-export function OrderPage(p: { shop: PublicShop; order: RenderedOrder; urls: ShopUrls }) {
+function Cancel(p: { order: RenderedOrder; shop: PublicShop; urls: ShopUrls; decision: CancelDecision }) {
+  const { order, decision } = p;
+  if (!decision.allowed) {
+    return (
+      <p class="muted small">
+        {decision.reason}：<a href={`tel:${p.shop.phone}`}>{p.shop.phone}</a>
+      </p>
+    );
+  }
+  const what = order.fulfillment === "booking" ? "预约" : "订单";
+  const label = decision.refund ? `取消${what}并退款 ${price(order.totalFen)}` : `取消${what}`;
+  const confirm = decision.refund ? `确定取消吗？${price(order.totalFen)} 会原路退回。` : "确定取消这个订单吗？";
+  return (
+    <form method="post" action={`${p.urls.shop}/orders/${order.id}/cancel`} data-confirm={confirm}>
+      <button type="submit" class="btn ghost block">
+        {label}
+      </button>
+    </form>
+  );
+}
+
+export function OrderPage(p: {
+  shop: PublicShop;
+  order: RenderedOrder;
+  urls: ShopUrls;
+  theme: Theme;
+  // What cancelling would do now; null once the order has ended.
+  cancel: CancelDecision | null;
+}) {
   const { shop, order, urls } = p;
   const shown = presentOrder(order);
   const pending = order.status === "pending_payment";
   return (
-    <Layout title={`${shown.statusText} - ${shop.name}`}>
+    <Layout title={`${shown.statusText} - ${shop.name}`} theme={p.theme}>
       <p class="small">
         <a href={urls.shop}>← {shop.name}</a>
       </p>
@@ -89,7 +118,9 @@ export function OrderPage(p: { shop: PublicShop; order: RenderedOrder; urls: Sho
           <dd class="small">{order.id}</dd>
         </dl>
       </section>
+      {p.cancel ? <Cancel order={order} shop={shop} urls={urls} decision={p.cancel} /> : null}
       {pending ? <script dangerouslySetInnerHTML={{ __html: ORDER_SCRIPT }} /> : null}
+      {p.cancel?.allowed ? <script dangerouslySetInnerHTML={{ __html: CANCEL_SCRIPT }} /> : null}
     </Layout>
   );
 }

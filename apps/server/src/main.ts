@@ -22,4 +22,8 @@ if (process.env.SEED !== "0") {
   if (tokens) console.log("seeded demo shops; merchant tokens:", tokens);
 }
 
-serve({ fetch: createApp(shop, payments).fetch, port }, () => console.log(`openshop listening on ${baseUrl}`));
+// Signs merchants' preview links. Unset, a random one is used and links die on restart.
+const previewSecret = process.env.PREVIEW_SECRET;
+if (!previewSecret) console.warn("PREVIEW_SECRET is not set; preview links stop working when the server restarts");
+
+serve({ fetch: createApp(shop, payments, { previewSecret }).fetch, port }, () => console.log(`openshop listening on ${baseUrl}`));

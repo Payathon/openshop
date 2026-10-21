@@ -134,6 +134,15 @@ export const CHECKOUT_SCRIPT = `(() => {
   else loadStock();
 })();`;
 
+// Asks before cancelling; without JS the form still works, just without the question.
+export const CANCEL_SCRIPT = `(() => {
+  const form = document.querySelector("form[data-confirm]");
+  form.addEventListener("submit", (e) => {
+    if (!confirm(form.dataset.confirm)) e.preventDefault();
+    else form.querySelector("button").disabled = true;
+  });
+})();`;
+
 // Waits on an unpaid order: reloads the page once its status changes (e.g. paid in another tab).
 export const ORDER_SCRIPT = `(() => {
   const url = document.getElementById("order-status").dataset.url;

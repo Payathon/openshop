@@ -11,7 +11,6 @@ import {
   type BookingSchedule,
   type CancelPolicy,
   type OrderStatus,
-  type ProductInput,
 } from "@openshop/core";
 import type { Db } from "./db/client.ts";
 import { customers, orderItems, orders, products, shops, variants, type Address, type StoredSchedule } from "./db/schema.ts";
@@ -29,7 +28,7 @@ export class ShopError extends Error {
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 const newToken = (prefix: string) => `${prefix}_${randomBytes(24).toString("base64url")}`;
-const newId = (prefix: string) => `${prefix}_${randomUUID().replaceAll("-", "").slice(0, 16)}`;
+export const newId = (prefix: string) => `${prefix}_${randomUUID().replaceAll("-", "").slice(0, 16)}`;
 
 // Beijing time has no DST, so local dates are a fixed shift away.
 const localDate = (d: Date) => new Date(d.getTime() + 8 * 3_600_000).toISOString().slice(0, 10);
@@ -156,6 +155,8 @@ export class OpenShop {
       schedule: input.schedule ?? null,
       cancelPolicy: input.cancelPolicy ?? { freeCancelHoursBefore: 24 },
       merchantTokenHash: sha256(token),
+      // Hidden from customers until the merchant's first publish (studio.ts).
+      status: "draft",
       createdAt: this.clock(),
     };
     const inserted = await this.db.insert(shops).values(row).onConflictDoNothing({ target: shops.slug }).returning();
@@ -173,14 +174,15 @@ export class OpenShop {
     return publicShop(await this.shopBySlug(slug));
   }
 
+  // Customers (web, API, MCP, CLI) only ever reach live shops; drafts look like they don't exist.
   private async shopBySlug(slug: string) {
-    const [s] = await this.db.select().from(shops).where(eq(shops.slug, slug));
+    const [s] = await this.db.select().from(shops).where(and(eq(shops.slug, slug), eq(shops.status, "live")));
     if (!s) throw new ShopError(404, "shop_not_found", `找不到店铺 ${slug}`);
     return s;
   }
 
   // ---- products ---------------------------------------------------------
-  // Content edits go straight to live data for now; the changeset/preview layer comes in M4.
+  // Read-only here: merchants edit products through changesets and publishing (studio.ts).
 
   async listProducts(slug: string) {
     const shop = await this.shopBySlug(slug);
@@ -206,89 +208,6 @@ export class OpenShop {
     if (ps.length === 0) return [];
     const vs = await this.db.select().from(variants).where(inArray(variants.productId, ps.map((p) => p.id)));
     return ps.map((p) => publicProduct(p, vs));
-  }
-
-  async createProduct(shopId: string, input: ProductInput) {
-    checkProductShape(input);
-    const product: ProductRow = {
-      id: newId("prod"),
-      shopId,
-      name: input.name,
-      description: input.description,
-      images: input.images,
-      fulfillment: input.fulfillment,
-      durationMinutes: input.durationMinutes,
-      orderOptions: input.orderOptions,
-      info: input.info,
-      published: input.published,
-      deleted: false,
-      createdAt: this.clock(),
-    };
-    const vs = input.variants.map((v, position) => ({
-      id: newId("var"),
-      productId: product.id,
-      shopId,
-      position,
-      attributes: v.attributes,
-      priceFen: v.priceFen,
-      stock: input.fulfillment === "shipping" ? (v.stock ?? 0) : null,
-      deleted: false,
-    }));
-    await this.db.transaction(async (tx) => {
-      await tx.insert(products).values(product);
-      await tx.insert(variants).values(vs);
-    });
-    return publicProduct(product, vs);
-  }
-
-  // Variants are matched by position so existing ids (and order history) stay stable.
-  async updateProduct(shopId: string, productId: string, input: ProductInput) {
-    checkProductShape(input);
-    return this.db.transaction(async (tx) => {
-      const [p] = await tx
-        .update(products)
-        .set({
-          name: input.name,
-          description: input.description,
-          images: input.images,
-          fulfillment: input.fulfillment,
-          durationMinutes: input.durationMinutes,
-          orderOptions: input.orderOptions,
-          info: input.info,
-          published: input.published,
-        })
-        .where(and(eq(products.id, productId), eq(products.shopId, shopId), eq(products.deleted, false)))
-        .returning();
-      if (!p) throw new ShopError(404, "product_not_found", "找不到这个商品");
-      const existing = await tx
-        .select()
-        .from(variants)
-        .where(and(eq(variants.productId, productId), eq(variants.deleted, false)))
-        .orderBy(asc(variants.position));
-      for (const [position, v] of input.variants.entries()) {
-        const stock = input.fulfillment === "shipping" ? (v.stock ?? 0) : null;
-        const old = existing[position];
-        if (old) {
-          await tx.update(variants).set({ attributes: v.attributes, priceFen: v.priceFen, stock }).where(eq(variants.id, old.id));
-        } else {
-          await tx.insert(variants).values({ id: newId("var"), productId, shopId, position, attributes: v.attributes, priceFen: v.priceFen, stock, deleted: false });
-        }
-      }
-      for (const old of existing.slice(input.variants.length)) {
-        await tx.update(variants).set({ deleted: true }).where(eq(variants.id, old.id));
-      }
-      const vs = await tx.select().from(variants).where(eq(variants.productId, productId));
-      return publicProduct(p, vs);
-    });
-  }
-
-  async deleteProduct(shopId: string, productId: string) {
-    const r = await this.db
-      .update(products)
-      .set({ deleted: true })
-      .where(and(eq(products.id, productId), eq(products.shopId, shopId)))
-      .returning({ id: products.id });
-    if (r.length === 0) throw new ShopError(404, "product_not_found", "找不到这个商品");
   }
 
   // An operational change: takes effect immediately, outside any changeset.
@@ -628,11 +547,5 @@ export class OpenShop {
       createdAt: o.createdAt.toISOString(),
       paidAt: o.paidAt?.toISOString() ?? null,
     };
-  }
-}
-
-function checkProductShape(input: ProductInput) {
-  if (input.fulfillment === "booking" && !input.durationMinutes) {
-    throw new ShopError(400, "invalid_request", "预约类商品需要填写服务时长（durationMinutes）");
   }
 }
