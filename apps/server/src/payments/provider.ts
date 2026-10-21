@@ -11,6 +11,9 @@ export interface PaymentRequest {
   amountFen: Fen;
   subject: string;
   expiresAt: Date;
+  // Where the cashier sends the customer after paying (page.pay return_url). Web orders only:
+  // an agent's customer goes back to the conversation instead.
+  returnUrl?: string | undefined;
 }
 
 export interface PaymentProvider {

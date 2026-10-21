@@ -90,9 +90,11 @@ export async function setup() {
   }
 
   // What the customer's confirmation in Alipay does in the fake provider.
+  // Returns where the cashier sends the customer afterwards (web orders only).
   async function pay(order: { paymentUrl: string }) {
     const res = await app.request(order.paymentUrl, { method: "POST" });
-    if (res.status !== 200) throw new Error(`fake pay failed: ${res.status}`);
+    if (res.status !== 200 && res.status !== 303) throw new Error(`fake pay failed: ${res.status}`);
+    return res.headers.get("location");
   }
 
   return {

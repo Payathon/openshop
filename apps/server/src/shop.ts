@@ -88,6 +88,7 @@ const publicProduct = (p: ProductRow, vs: VariantRow[]) => ({
 
 export type RenderedOrder = {
   id: string;
+  shopId: string;
   status: OrderStatus;
   fulfillment: OrderRow["fulfillment"];
   source: string;
@@ -122,7 +123,7 @@ export class OpenShop {
   readonly db: Db;
   readonly payments: PaymentProvider;
   private readonly clock: () => Date;
-  private readonly baseUrl: string;
+  readonly baseUrl: string;
 
   constructor(deps: { db: Db; payments: PaymentProvider; clock?: () => Date; baseUrl: string }) {
     this.db = deps.db;
@@ -132,6 +133,15 @@ export class OpenShop {
   }
 
   // ---- shops ------------------------------------------------------------
+
+  now() {
+    return this.clock();
+  }
+
+  // The shop's public web address. Path-based for now; subdomains would change only this.
+  shopUrl(slug: string) {
+    return `${this.baseUrl}/s/${slug}`;
+  }
 
   async createShop(input: NewShop) {
     const token = newToken("osm");
@@ -443,6 +453,7 @@ export class OpenShop {
       amountFen: fen(totalFen),
       subject,
       expiresAt: order.paymentExpiresAt,
+      returnUrl: order.source === "web" ? `${this.shopUrl(shop.slug)}/orders/${order.id}` : undefined,
     });
     await this.db.update(orders).set({ paymentUrl }).where(eq(orders.id, order.id));
     return { ...(await this.renderOrder({ ...order, paymentUrl })), accessToken };
@@ -592,6 +603,7 @@ export class OpenShop {
     const items = await db.select().from(orderItems).where(eq(orderItems.orderId, o.id));
     return {
       id: o.id,
+      shopId: o.shopId,
       status: o.status,
       fulfillment: o.fulfillment,
       source: o.source,

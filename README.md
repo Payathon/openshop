@@ -16,6 +16,7 @@ PAYATHON 2026 参赛项目。比赛规则见上级目录 [`../docs/PROJECT_CONTE
 - [产品决策记录](docs/product-decisions.md)：产品形态、模块、流程、收费方式等已确认的决定
 - [支付可行性调研](docs/payment-research.md)
 - [技术方案](docs/tech-plan.md)：技术栈、数据模型、API、MCP、里程碑
+- [开发中自行决定的事项](docs/dev-notes.md)：MVP 阶段的实现细节和发布前要改的地方
 
 ## 本地运行
 
@@ -27,6 +28,8 @@ pnpm test            # 全部测试
 pnpm typecheck
 cd apps/server && pnpm dev   # http://localhost:8788，首次启动会建两家演示店并打印商家令牌
 ```
+
+店铺网页在 `/s/<店铺地址>`，比如 http://localhost:8788/s/nail-studio（预约）和 http://localhost:8788/s/bakery（快递）。页面由服务端渲染，用手机宽度看效果最好。每家店还提供给 agent 用的 `/s/<店铺地址>/llms.txt` 和 `/s/<店铺地址>/.well-known/openshop.json`。
 
 ### 让 agent 来下单
 
