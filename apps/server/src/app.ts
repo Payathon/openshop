@@ -1,5 +1,8 @@
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { Hono, type Context } from "hono";
 import { z } from "zod";
+import { Buyer } from "@openshop/client/buyer";
+import { createMcpServer } from "@openshop/client/mcp";
 import { productInputSchema, type OrderStatus } from "@openshop/core";
 import { FakePaymentProvider } from "./payments/fake.ts";
 import type { PaymentProvider } from "./payments/provider.ts";
@@ -92,6 +95,21 @@ export function createApp(shop: OpenShop, payments: PaymentProvider) {
   const orderToken = (c: Context) => c.req.header("x-order-token") ?? "";
   app.get("/api/orders/:id", async (c) => c.json(await shop.getOrder(c.req.param("id"), orderToken(c))));
   app.post("/api/orders/:id/cancel", async (c) => c.json(await shop.cancelOrder(c.req.param("id"), orderToken(c))));
+
+  // ---- remote MCP: the storefront tools for customers' agents ---------------
+  // Public like the storefront itself. Stateless: each request gets its own server, and tools
+  // call this app in-process. Without local storage, the agent keeps each order's access token.
+
+  app.all("/mcp", async (c) => {
+    const buyer = new Buyer({
+      server: "http://openshop.internal",
+      fetch: (url, init) => Promise.resolve(app.fetch(new Request(url, init))),
+      ownShopsOnly: true,
+    });
+    const transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true });
+    await createMcpServer(buyer).connect(transport);
+    return transport.handleRequest(c.req.raw);
+  });
 
   // ---- merchant: bearer token from shop creation --------------------------
 
