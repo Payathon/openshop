@@ -1,5 +1,6 @@
 /** @jsxImportSource hono/jsx */
-import { jsonForScript, Layout, price, variantLabel, WEEKDAYS, type PublicProduct, type PublicShop } from "./layout.tsx";
+import type { Theme } from "@openshop/core";
+import { Img, jsonForScript, Layout, PreviewBar, price, variantLabel, WEEKDAYS, type PublicProduct, type PublicShop } from "./layout.tsx";
 import type { ShopUrls } from "./discovery.ts";
 import { CHECKOUT_SCRIPT } from "./scripts.ts";
 
@@ -17,24 +18,32 @@ function bookingDays(shop: PublicShop, now: Date) {
   });
 }
 
-export function ProductPage(p: { shop: PublicShop; product: PublicProduct; urls: ShopUrls; now: Date }) {
+export function ProductPage(p: {
+  shop: PublicShop;
+  product: PublicProduct;
+  urls: ShopUrls;
+  now: Date;
+  theme: Theme;
+  // Preview links show the product but can't take orders: it may not exist live yet.
+  preview?: { sample: boolean } | undefined;
+}) {
   const { shop, product, urls } = p;
-  const booking = product.fulfillment === "booking";
-  const days = booking ? bookingDays(shop, p.now) : [];
-  const single = product.variants.length === 1 && Object.keys(product.variants[0]!.attributes).length === 0;
-  const data = {
-    fulfillment: product.fulfillment,
-    availability: `${urls.server}/api/s/${shop.slug}/availability`,
-    checkout: `${urls.shop}/checkout`,
-    variants: product.variants.map((v) => ({ id: v.id, priceFen: v.priceFen })),
-  };
-
-  return (
-    <Layout title={`${product.name} - ${shop.name}`} description={product.description || `${shop.name} 的 ${product.name}`}>
+  const head = (
+    <>
       <p class="small">
         <a href={urls.shop}>← {shop.name}</a>
       </p>
-      <h1>{product.name}</h1>
+      {product.images.length > 0 ? (
+        <div class="photos">
+          {product.images.map((src, i) => (
+            <Img src={src} alt={product.name} width={480} height={360} eager={i === 0} />
+          ))}
+        </div>
+      ) : null}
+      <h1>
+        {product.name}
+        {p.preview?.sample ? <span class="badge">示例</span> : null}
+      </h1>
       {product.description ? <p class="muted">{product.description}</p> : null}
       {product.info.length > 0 ? (
         <dl class="rows small">
@@ -46,6 +55,39 @@ export function ProductPage(p: { shop: PublicShop; product: PublicProduct; urls:
           ))}
         </dl>
       ) : null}
+    </>
+  );
+
+  if (p.preview) {
+    return (
+      <Layout title={`预览：${product.name} - ${shop.name}`} theme={p.theme} head={<meta name="robots" content="noindex" />}>
+        <PreviewBar />
+        {head}
+        <section class="card">
+          {product.variants.map((v) => (
+            <p class="price">
+              {variantLabel(v.attributes) ? `${variantLabel(v.attributes)} · ` : ""}
+              {price(v.priceFen)}
+            </p>
+          ))}
+          <p class="muted small">预览里不能下单。发布后，顾客在这里选{product.fulfillment === "booking" ? "时间" : "规格和数量"}并付款。</p>
+        </section>
+      </Layout>
+    );
+  }
+  const booking = product.fulfillment === "booking";
+  const days = booking ? bookingDays(shop, p.now) : [];
+  const single = product.variants.length === 1 && Object.keys(product.variants[0]!.attributes).length === 0;
+  const data = {
+    fulfillment: product.fulfillment,
+    availability: `${urls.server}/api/s/${shop.slug}/availability`,
+    checkout: `${urls.shop}/checkout`,
+    variants: product.variants.map((v) => ({ id: v.id, priceFen: v.priceFen })),
+  };
+
+  return (
+    <Layout title={`${product.name} - ${shop.name}`} description={product.description || `${shop.name} 的 ${product.name}`} theme={p.theme}>
+      {head}
 
       <form id="checkout" class="card">
         <div class={single ? "" : "chips"} role={single ? undefined : "radiogroup"} aria-label="规格">

@@ -12,8 +12,21 @@ export const scheduleSchema = z.object({
   closures: z.array(z.object({ start: z.iso.datetime({ offset: true }), end: z.iso.datetime({ offset: true }) })).default([]),
 });
 
+const slug = z.string().regex(/^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$/, "店铺地址只能用小写字母、数字和连字符，3–40 位");
+
+// Opening a shop from an industry template (product-decisions #6). Without a slug, one is generated.
+export const onboardSchema = z.object({
+  industry: z.string(),
+  modules: z.array(z.enum(["booking", "shopping", "banner", "gallery", "text"])).optional(),
+  name: z.string().min(1).max(50),
+  phone,
+  address: z.string().max(200).optional(),
+  description: z.string().max(2000).optional(),
+  slug: slug.optional(),
+});
+
 export const newShopSchema = z.object({
-  slug: z.string().regex(/^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$/, "店铺地址只能用小写字母、数字和连字符，3–40 位"),
+  slug,
   name: z.string().min(1).max(50),
   industry: z.string().min(1).max(30),
   description: z.string().max(2000).optional(),

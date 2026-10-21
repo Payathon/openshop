@@ -50,6 +50,53 @@ describe("shop pages", () => {
     expect((await get(t, "/s/nail-studio/p/prod_nope")).status).toBe(404);
   });
 
+  it("shows product images lazily, and nothing when there are none", async () => {
+    const t = await setup();
+    const { token, product } = await t.nailStudio();
+    expect((await get(t, "/s/nail-studio")).text).not.toContain("<img");
+
+    await t.ok("PUT", `/api/merchant/products/${product.id}`, {
+      token,
+      body: {
+        name: "法式美甲",
+        fulfillment: "booking",
+        durationMinutes: 90,
+        images: ["https://img.example/a.jpg", "/files/b.jpg"],
+        orderOptions: [{ key: "color", label: "颜色", type: "choice", choices: ["裸粉", "酒红"], required: true }],
+        variants: [{ priceFen: 16800 }],
+      },
+    });
+    const bad = await t.call("PUT", `/api/merchant/products/${product.id}`, {
+      token,
+      body: { name: "x", fulfillment: "booking", durationMinutes: 90, images: ["javascript:alert(1)"], variants: [{ priceFen: 1 }] },
+    });
+    expect(bad.status).toBe(400);
+    await t.ok("POST", "/api/merchant/publish", { token });
+
+    const shop = await get(t, "/s/nail-studio");
+    expect(shop.text).toContain('<img src="https://img.example/a.jpg" alt="法式美甲" class="thumb" width="72" height="72" loading="lazy" decoding="async"');
+    const detail = await get(t, `/s/nail-studio/p/${product.id}`);
+    expect(detail.text).toContain('class="photos"');
+    expect(detail.text).toContain('src="https://img.example/a.jpg" alt="法式美甲" width="480" height="360" loading="eager"');
+    expect(detail.text).toContain('src="/files/b.jpg" alt="法式美甲" width="480" height="360" loading="lazy"');
+  });
+
+  it("renders custom HTML without anything executable", async () => {
+    const t = await setup();
+    const { token } = await t.nailStudio();
+    await t.ok("POST", "/api/merchant/changes", {
+      token,
+      body: {
+        kind: "section.add",
+        section: { type: "custom_html", props: { html: `<h3>品牌故事</h3><script>steal()</script><p onclick="x()">十年手艺</p><iframe src="https://evil"></iframe>` } },
+      },
+    });
+    await t.ok("POST", "/api/merchant/publish", { token });
+    const text = (await get(t, "/s/nail-studio")).text;
+    expect(text).toContain("<h3>品牌故事</h3><p>十年手艺</p>");
+    expect(text).not.toMatch(/steal|onclick|iframe/);
+  });
+
   it("tells agents how to order in llms.txt and openshop.json", async () => {
     const t = await setup();
     await t.nailStudio();
@@ -128,6 +175,46 @@ describe("web checkout", () => {
     expect((await get(t, `/s/nail-studio/orders/${r.body.orderId}`, `${r.cookie.split("=")[0]}=oso_wrong`)).status).toBe(404);
     // A valid token still doesn't show the order under another shop.
     expect((await get(t, `/s/bakery/orders/${r.body.orderId}`, r.cookie)).status).toBe(404);
+  });
+
+  it("cancels from the order page, saying first whether money comes back", async () => {
+    const t = await setup();
+    const { variantId } = await t.nailStudio();
+    const book = (hhmm: string) => checkout(t, "nail-studio", { items: [{ variantId, options: { color: "裸粉" } }], customer, slotStart: sat(hhmm) });
+    const cancel = (orderId: string, cookie: string) =>
+      t.app.request(`${BASE}/s/nail-studio/orders/${orderId}/cancel`, { method: "POST", headers: { cookie } });
+
+    // Unpaid: a plain cancel.
+    const unpaid = await book("10:00");
+    expect((await get(t, `/s/nail-studio/orders/${unpaid.body.orderId}`, unpaid.cookie)).text).toContain(">取消预约</button>");
+
+    // Paid and early enough: cancel with refund.
+    const paid = await book("14:00");
+    await t.pay(paid.body);
+    const before = await get(t, `/s/nail-studio/orders/${paid.body.orderId}`, paid.cookie);
+    expect(before.text).toContain("取消预约并退款 ¥168");
+    expect(before.text).toContain("data-confirm=");
+    const res = await cancel(paid.body.orderId, paid.cookie);
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe(`${BASE}/s/nail-studio/orders/${paid.body.orderId}`);
+    const after = await get(t, `/s/nail-studio/orders/${paid.body.orderId}`, paid.cookie);
+    expect(after.text).toContain("已取消");
+    expect(after.text).toContain("款项已原路退回");
+    expect(after.text).not.toContain("<button");
+    expect(t.payments.refunds).toHaveLength(1);
+
+    // Too close to the appointment: no button, the reason and the shop's phone instead.
+    const late = await book("16:00");
+    await t.pay(late.body);
+    t.advance(45 * 3_600_000);
+    const blocked = await get(t, `/s/nail-studio/orders/${late.body.orderId}`, late.cookie);
+    expect(blocked.text).toContain("距离预约开始不足 24 小时，需要联系商家取消");
+    expect(blocked.text).toContain('href="tel:13800000000"');
+    expect(blocked.text).not.toContain("取消预约并退款");
+    // Posting anyway changes nothing.
+    expect((await cancel(late.body.orderId, late.cookie)).status).toBe(303);
+    expect((await get(t, `/s/nail-studio/orders/${late.body.orderId}`, late.cookie)).text).toContain("预约成功");
+    expect((await cancel(late.body.orderId, "")).status).toBe(404);
   });
 
   it("keeps agent orders on the cashier's own success page", async () => {

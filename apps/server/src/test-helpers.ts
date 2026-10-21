@@ -72,6 +72,7 @@ export async function setup() {
         variants: [{ priceFen: 16800 }],
       },
     });
+    await ok("POST", "/api/merchant/publish", { token });
     return { token, product, variantId: product.variants[0].id as string };
   }
 
@@ -92,6 +93,7 @@ export async function setup() {
         ],
       },
     });
+    await ok("POST", "/api/merchant/publish", { token });
     return { token, product, smallId: product.variants[0].id as string, largeId: product.variants[1].id as string };
   }
 

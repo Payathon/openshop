@@ -25,8 +25,12 @@ if (process.env.SEED !== "0") {
   if (tokens) console.log("seeded demo shops; merchant tokens:", tokens);
 }
 
+// Signs merchants' preview links. Unset, a random one is used and links die on restart.
+const previewSecret = process.env.PREVIEW_SECRET;
+if (!previewSecret) console.warn("PREVIEW_SECRET is not set; preview links stop working when the server restarts");
+
 const jobs = startPaymentSync(shop, Number(process.env.PAYMENT_SYNC_MS ?? 10_000));
-const server = serve({ fetch: createApp(shop, payments, { storage }).fetch, port }, () => console.log(`openshop listening on ${baseUrl}`));
+const server = serve({ fetch: createApp(shop, payments, { storage, previewSecret }).fetch, port }, () => console.log(`openshop listening on ${baseUrl}`));
 
 // docker stop sends SIGTERM: finish the sweep and in-flight requests, then exit before the kill.
 let stopping = false;

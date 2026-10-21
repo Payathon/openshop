@@ -3,13 +3,15 @@ import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { Buyer } from "@openshop/client/buyer";
 import { createMcpServer } from "@openshop/client/mcp";
-import { productInputSchema, type OrderStatus } from "@openshop/core";
+import { MODULES, productInputSchema, TEMPLATES, type OrderStatus } from "@openshop/core";
 import { bodyLimit } from "hono/body-limit";
+import { opInputSchema, type OpInput } from "./content.ts";
 import { FakePaymentProvider } from "./payments/fake.ts";
 import type { PaymentProvider } from "./payments/provider.ts";
-import { newOrderSchema, newShopSchema } from "./schemas.ts";
+import { newOrderSchema, newShopSchema, onboardSchema, scheduleSchema } from "./schemas.ts";
 import { OpenShop, ShopError } from "./shop.ts";
 import { LocalDiskStorage, MAX_IMAGE_BYTES, newImageKey, sniffImage, type Storage } from "./storage.ts";
+import { Studio } from "./studio.ts";
 import { shopSite } from "./web/site.tsx";
 
 type Env = { Variables: { shopId: string } };
@@ -25,9 +27,15 @@ async function body<T extends z.ZodType>(c: Context, schema: T): Promise<z.infer
 
 const orderStatuses = ["pending_payment", "confirmed", "paid", "shipped", "completed", "cancelled", "expired"] as const;
 
-export function createApp(shop: OpenShop, payments: PaymentProvider, opts: { storage?: Storage } = {}) {
+// previewSecret signs merchants' preview links; set it (PREVIEW_SECRET) so links survive restarts.
+export function createApp(
+  shop: OpenShop,
+  payments: PaymentProvider,
+  opts: { storage?: Storage; previewSecret?: string | undefined } = {},
+) {
   const app = new Hono<Env>();
   const { storage } = opts;
+  const studio = new Studio(shop, opts);
 
   app.onError((err, c) => {
     if (err instanceof ShopError) return c.json({ error: err.code, message: err.message }, err.status);
@@ -39,7 +47,15 @@ export function createApp(shop: OpenShop, payments: PaymentProvider, opts: { sto
 
   // ---- storefront: what the web page and customers' agents use ------------
 
+  // A blank draft shop. Merchants normally start from /api/onboarding instead.
   app.post("/api/shops", async (c) => c.json(await shop.createShop(await body(c, newShopSchema)), 201));
+  app.post("/api/onboarding", async (c) => c.json(await studio.onboard(await body(c, onboardSchema)), 201));
+  app.get("/api/templates", (c) =>
+    c.json({
+      industries: Object.values(TEMPLATES).map((t) => ({ key: t.key, label: t.label, modules: t.modules })),
+      modules: MODULES,
+    }),
+  );
 
   app.get("/api/s/:slug", async (c) => c.json(await shop.getShop(c.req.param("slug"))));
   app.get("/api/s/:slug/products", async (c) => c.json(await shop.listProducts(c.req.param("slug"))));
@@ -59,7 +75,7 @@ export function createApp(shop: OpenShop, payments: PaymentProvider, opts: { sto
 
   // ---- shop websites: server-rendered pages for customers' browsers -------
 
-  app.route("/s/:slug", shopSite(shop));
+  app.route("/s/:slug", shopSite(shop, studio));
 
   // ---- remote MCP: the storefront tools for customers' agents ---------------
   // Public like the storefront itself. Stateless: each request gets its own server, and tools
@@ -86,13 +102,42 @@ export function createApp(shop: OpenShop, payments: PaymentProvider, opts: { sto
     await next();
   });
 
-  app.post("/api/merchant/products", async (c) => c.json(await shop.createProduct(c.get("shopId"), await body(c, productInputSchema)), 201));
-  app.put("/api/merchant/products/:id", async (c) =>
-    c.json(await shop.updateProduct(c.get("shopId"), c.req.param("id"), await body(c, productInputSchema))),
-  );
-  app.delete("/api/merchant/products/:id", async (c) => {
-    await shop.deleteProduct(c.get("shopId"), c.req.param("id"));
+  // Content edits (docs/tech-plan.md, 预览与发布) wait in the shop's changeset: they show in
+  // previews at once and go live on publish. /changes takes any op from content.ts; this is
+  // what the merchant agent's tools will call. The product routes are shorthands for it.
+
+  app.get("/api/merchant/shop", async (c) => c.json(await studio.overview(c.get("shopId"))));
+  app.get("/api/merchant/changes", async (c) => c.json(await studio.changes(c.get("shopId"))));
+  app.post("/api/merchant/changes", async (c) => c.json(await studio.propose(c.get("shopId"), await body(c, opInputSchema)), 201));
+  app.delete("/api/merchant/changes/:id", async (c) => c.json(await studio.undo(c.get("shopId"), c.req.param("id"))));
+  app.delete("/api/merchant/changes", async (c) => {
+    await studio.discard(c.get("shopId"));
     return c.body(null, 204);
+  });
+  app.post("/api/merchant/preview-link", async (c) => c.json(await studio.previewLink(c.get("shopId")), 201));
+  app.post("/api/merchant/publish", async (c) => c.json(await studio.publish(c.get("shopId"))));
+  app.get("/api/merchant/publishes", async (c) => c.json(await studio.publishHistory(c.get("shopId"))));
+  app.post("/api/merchant/publishes/:version/rollback", async (c) => {
+    const version = Number(c.req.param("version"));
+    if (!Number.isInteger(version) || version < 1) throw new ShopError(400, "invalid_request", "版本号不正确");
+    return c.json(await studio.rollback(c.get("shopId"), version));
+  });
+
+  const productEdit = async (c: Context<Env>, input: OpInput) => {
+    const { change, product } = await studio.propose(c.get("shopId"), input);
+    return { ...product, change };
+  };
+  app.post("/api/merchant/products", async (c) => c.json(await productEdit(c, { kind: "product.create", product: await body(c, productInputSchema) }), 201));
+  app.put("/api/merchant/products/:id", async (c) =>
+    c.json(await productEdit(c, { kind: "product.update", id: c.req.param("id"), product: await body(c, productInputSchema) })),
+  );
+  app.delete("/api/merchant/products/:id", async (c) => c.json(await studio.propose(c.get("shopId"), { kind: "product.delete", id: c.req.param("id") })));
+
+  // Operational changes take effect immediately.
+
+  app.put("/api/merchant/closures", async (c) => {
+    const { closures } = await body(c, z.object({ closures: scheduleSchema.shape.closures }));
+    return c.json(await studio.setClosures(c.get("shopId"), closures));
   });
 
   app.put("/api/merchant/variants/:id/stock", async (c) => {

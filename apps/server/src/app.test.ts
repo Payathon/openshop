@@ -182,6 +182,7 @@ describe("shipping", () => {
       token,
       body: { name: "护甲油", fulfillment: "shipping", variants: [{ priceFen: 2900, stock: 5 }] },
     });
+    await t.ok("POST", "/api/merchant/publish", { token });
     const r = await t.call("POST", "/api/s/nail-studio/orders", {
       body: {
         items: [{ variantId, options: { color: "裸粉" } }, { variantId: cookie.variants[0].id }],

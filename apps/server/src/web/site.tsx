@@ -4,16 +4,19 @@ import { getCookie, setCookie } from "hono/cookie";
 import { html } from "hono/html";
 import type { Child } from "hono/jsx";
 import { z } from "zod";
+import { cancellation, TERMINAL } from "@openshop/core";
 import { newOrderSchema } from "../schemas.ts";
 import { ShopError, type OpenShop } from "../shop.ts";
+import type { Studio } from "../studio.ts";
 import { llmsTxt, openshopJson, type ShopUrls } from "./discovery.ts";
-import { NotFound } from "./layout.tsx";
+import { NotFound, type PublicProduct, type PublicShop } from "./layout.tsx";
 import { OrderPage } from "./order-page.tsx";
 import { ProductPage } from "./product-page.tsx";
-import { defaultSections, ShopPage } from "./shop-page.tsx";
+import { ShopPage } from "./shop-page.tsx";
 
 // One shop's website, with paths relative to the shop root. app.ts mounts it at /s/:slug;
 // a Host-based entry (slug.openshop.xx) would mount the same routes at / and set the slug.
+// /preview/<token>/… serves the same pages from the merchant's unpublished content.
 
 type Env = { Variables: { slug: string } };
 
@@ -40,7 +43,7 @@ function readable(error: z.ZodError) {
   return field ? `请检查${field}` : "下单信息有误，请检查后重试";
 }
 
-export function shopSite(shop: OpenShop) {
+export function shopSite(shop: OpenShop, studio: Studio) {
   const site = new Hono<Env>();
 
   site.use(async (c, next) => {
@@ -57,28 +60,63 @@ export function shopSite(shop: OpenShop) {
     return c.text("服务器出错了，请稍后再试", 500);
   });
 
-  async function load(c: Context<Env>) {
+  // The published shop, as customers see it.
+  async function live(c: Context<Env>) {
     const slug = c.get("slug");
     const s = await shop.getShop(slug);
     const urls: ShopUrls = { shop: shop.shopUrl(slug), server: shop.baseUrl };
-    return { shop: s, urls };
+    return { shop: s, urls, page: await studio.livePage(s.id, !!s.schedule) };
+  }
+
+  // The merchant's unpublished content behind a signed link. Links inside stay in the preview.
+  async function preview(c: Context<Env>) {
+    const slug = c.get("slug");
+    const token = c.req.param("token")!;
+    const { row, content } = await studio.preview(slug, token);
+    const s: PublicShop = {
+      id: row.id,
+      slug: row.slug,
+      industry: row.industry,
+      ...content.shop,
+      schedule: content.shop.hours && { weekly: content.shop.hours.weekly, capacity: content.shop.hours.capacity },
+    };
+    const products: PublicProduct[] = content.products.filter((p) => p.published);
+    const samples = new Set(content.products.filter((p) => p.sample).map((p) => p.id));
+    const urls: ShopUrls = { shop: `${shop.shopUrl(slug)}/preview/${token}`, server: shop.baseUrl };
+    c.header("cache-control", "no-store");
+    return { shop: s, products, samples, urls, page: content.page };
   }
 
   site.get("/", async (c) => {
-    const { shop: s, urls } = await load(c);
-    const products = await shop.listProducts(s.slug);
-    return page(c, <ShopPage shop={s} products={products} urls={urls} sections={defaultSections(s)} />);
+    const v = await live(c);
+    const products = await shop.listProducts(v.shop.slug);
+    return page(c, <ShopPage shop={v.shop} products={products} urls={v.urls} page={v.page} preview={null} />);
   });
 
   site.get("/p/:productId", async (c) => {
-    const { shop: s, urls } = await load(c);
-    const product = await shop.getProduct(s.slug, c.req.param("productId"));
-    return page(c, <ProductPage shop={s} product={product} urls={urls} now={shop.now()} />);
+    const v = await live(c);
+    const product = await shop.getProduct(v.shop.slug, c.req.param("productId"));
+    return page(c, <ProductPage shop={v.shop} product={product} urls={v.urls} now={shop.now()} theme={v.page.theme} />);
+  });
+
+  site.get("/preview/:token", async (c) => {
+    const v = await preview(c);
+    return page(c, <ShopPage shop={v.shop} products={v.products} urls={v.urls} page={v.page} preview={{ samples: v.samples }} />);
+  });
+
+  site.get("/preview/:token/p/:productId", async (c) => {
+    const v = await preview(c);
+    const product = v.products.find((p) => p.id === c.req.param("productId"));
+    if (!product) throw new ShopError(404, "product_not_found", "找不到这个商品");
+    return page(
+      c,
+      <ProductPage shop={v.shop} product={product} urls={v.urls} now={shop.now()} theme={v.page.theme} preview={{ sample: v.samples.has(product.id) }} />,
+    );
   });
 
   // The page's form posts here rather than to the JSON API so the token can go into a cookie.
   site.post("/checkout", async (c) => {
-    const { shop: s, urls } = await load(c);
+    const { shop: s, urls } = await live(c);
     const input = newOrderSchema.safeParse(await c.req.json().catch(() => null));
     if (!input.success) return c.json({ error: "invalid_request", message: readable(input.error) }, 400);
     try {
@@ -98,7 +136,7 @@ export function shopSite(shop: OpenShop) {
   });
 
   async function customerOrder(c: Context<Env>) {
-    const { shop: s, urls } = await load(c);
+    const v = await live(c);
     const orderId = c.req.param("orderId")!;
     const token = getCookie(c, orderCookie(orderId));
     const missing = new ShopError(404, "order_not_found", "找不到这个订单。订单只能在下单时用的浏览器里查看。");
@@ -106,14 +144,18 @@ export function shopSite(shop: OpenShop) {
     const order = await shop.getOrder(orderId, token).catch((err: unknown) => {
       throw err instanceof ShopError && err.status === 404 ? missing : err;
     });
-    if (order.shopId !== s.id) throw missing;
-    return { shop: s, urls, order };
+    if (order.shopId !== v.shop.id) throw missing;
+    return { ...v, order, token };
   }
 
   site.get("/orders/:orderId", async (c) => {
-    const { shop: s, urls, order } = await customerOrder(c);
+    const { shop: s, urls, page: p, order } = await customerOrder(c);
+    // Same rules as the cancel itself, so the page can say up front what will happen.
+    const decision = TERMINAL.has(order.status)
+      ? null
+      : cancellation({ ...order, slotStart: order.slotStart ? new Date(order.slotStart) : null }, s.cancelPolicy, shop.now());
     c.header("cache-control", "no-store");
-    return page(c, <OrderPage shop={s} order={order} urls={urls} />);
+    return page(c, <OrderPage shop={s} order={order} urls={urls} theme={p.theme} cancel={decision} />);
   });
 
   site.get("/orders/:orderId/status", async (c) => {
@@ -122,15 +164,25 @@ export function shopSite(shop: OpenShop) {
     return c.json({ status: order.status });
   });
 
+  // A plain form post (SameSite=Lax keeps it same-site). Whatever the outcome, the order
+  // page shows the current state and, if cancelling isn't allowed, why.
+  site.post("/orders/:orderId/cancel", async (c) => {
+    const { urls, order, token } = await customerOrder(c);
+    await shop.cancelOrder(order.id, token).catch((err: unknown) => {
+      if (!(err instanceof ShopError && err.status === 409)) throw err;
+    });
+    return c.redirect(`${urls.shop}/orders/${order.id}`, 303);
+  });
+
   site.get("/llms.txt", async (c) => {
-    const { shop: s, urls } = await load(c);
+    const { shop: s, urls } = await live(c);
     return c.text(llmsTxt(s, await shop.listProducts(s.slug), urls), 200, { "content-type": "text/plain; charset=utf-8" });
   });
 
   // Per shop rather than at the domain root, because shops share the domain under /s/.
   // With subdomains this becomes the standard /.well-known/openshop.json.
   site.get("/.well-known/openshop.json", async (c) => {
-    const { shop: s, urls } = await load(c);
+    const { shop: s, urls } = await live(c);
     return c.json(openshopJson(s, urls));
   });
 
