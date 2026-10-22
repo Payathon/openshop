@@ -30,7 +30,7 @@ Run `openshop --version`. If the command isn't found, tell the user OpenShop's C
    Shipping orders take `"address":{"recipient","phone","region","detail"}` instead of `slotStart`, and items may have `"quantity"`. A booking has exactly one item; bookings and shipping items go in separate orders.
    The time or stock is held for 15 minutes (`payBefore`). If the order fails, read the message (e.g. the slot was just taken) and go back to the step it points to.
 6. **Pay**: the order has a `paymentUrl`.
-   - An Alipay cashier link (`*.alipay.com`): hand it to the Alipay payment skill (`alipay-payment-skill`), which guides the user through paying.
+   - An Alipay cashier link (`*.alipay.com`, or `*.alipaydev.com` in Alipay's sandbox): hand it to the Alipay payment skill (`alipay-payment-skill`), which guides the user through paying.
    - Any other link (a local test cashier): show it to the user exactly as returned and ask them to open it and pay.
    Then end your turn, and continue when the user says they've paid.
 7. **Check**: `openshop status <orderId> --wait` keeps checking for a while; run it again if it's still `pending_payment`. On `confirmed`, tell the user the time and the shop's address; on `paid`, that the shop will ship it. If it is `expired`, the hold ran out: offer to order again.

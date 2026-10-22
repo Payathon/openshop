@@ -115,7 +115,7 @@ interface DemoOrder {
   variant?: number;
 }
 
-async function placeOrders(call: Call, slug: string, orders: DemoOrder[]) {
+async function placeOrders(call: Call, slug: string, orders: DemoOrder[], canPay: boolean) {
   const live = await call<Product[]>("GET", `/api/s/${slug}/products`);
   for (const o of orders) {
     const p = live.find((x) => x.name === o.product)!;
@@ -125,14 +125,15 @@ async function placeOrders(call: Call, slug: string, orders: DemoOrder[]) {
       ...(o.at ? { slotStart: o.at } : { address: { recipient: o.customer.name, phone: o.customer.phone, region: "上海市 徐汇区", detail: "漕溪北路 88 号 1203 室" } }),
       source: o.source,
     });
-    if (!o.pay) continue;
+    // A real cashier can only be paid by a person, so with real Alipay every demo order stays unpaid.
+    if (!o.pay || !canPay) continue;
     await call("POST", new URL(created.paymentUrl).pathname);
     // Reading the order picks up the payment now rather than at the next background sync.
     await call("GET", `/api/merchant/orders/${created.id}`);
   }
 }
 
-async function seedNail(app: App, base: string) {
+async function seedNail(app: App, base: string, pay: boolean) {
   const call = client(app, base);
   const shop = await openShop(call, DEMO, {
     industry: "nail",
@@ -165,7 +166,7 @@ async function seedNail(app: App, base: string) {
     { product: "法式微笑美甲", at: upcoming(2, "14:00"), customer: { name: "王小姐", phone: "13700000001" }, source: "agent", pay: true, options: { color: "裸粉" } },
     { product: "猫眼美甲", at: upcoming(3, "11:00"), customer: { name: "陈女士", phone: "13700000002" }, source: "web", pay: true, options: { color: "裸粉" } },
     { product: "纯色美甲", at: upcoming(4, "16:00"), customer: { name: "刘同学", phone: "13700000003" }, source: "web", pay: false, options: { color: "裸粉" } },
-  ]);
+  ], pay);
 }
 
 const sizes = (names: string[], priceFen: number, stock: (size: string) => number) =>
@@ -182,7 +183,7 @@ const garment = (name: string, description: string, images: string[], variants: 
   published: true,
 });
 
-async function seedFashion(app: App, base: string) {
+async function seedFashion(app: App, base: string, pay: boolean) {
   const call = client(app, base);
   const shop = await openShop(call, FASHION, {
     industry: "fashion",
@@ -212,7 +213,7 @@ async function seedFashion(app: App, base: string) {
   await placeOrders(call, FASHION.slug, [
     { product: "落肩连帽卫衣", customer: { name: "赵先生", phone: "13700000011" }, source: "web", pay: true, variant: 1 },
     { product: "高腰直筒牛仔裤", customer: { name: "孙小姐", phone: "13700000012" }, source: "agent", pay: true, variant: 2 },
-  ]);
+  ], pay);
 }
 
 const table = (name: string, description: string, minutes: number, priceFen: number, images: string[]) => ({
@@ -227,7 +228,7 @@ const table = (name: string, description: string, minutes: number, priceFen: num
   published: true,
 });
 
-async function seedDining(app: App, base: string) {
+async function seedDining(app: App, base: string, pay: boolean) {
   const call = client(app, base);
   const shop = await openShop(call, DINING, {
     industry: "restaurant",
@@ -273,16 +274,17 @@ async function seedDining(app: App, base: string) {
   await placeOrders(call, DINING.slug, [
     { product: "双人招牌套餐", at: upcoming(1, "18:00"), customer: { name: "吴先生", phone: "13700000021" }, source: "agent", pay: true },
     { product: "2–4 人订座", at: upcoming(2, "12:00"), customer: { name: "郑女士", phone: "13700000022" }, source: "web", pay: true },
-  ]);
+  ], pay);
 }
 
 // Creates whichever demo accounts are missing; true if it created any.
-export async function seedAccounts(app: App, base: string): Promise<boolean> {
+export async function seedAccounts(app: App, base: string, opts: { pay?: boolean } = {}): Promise<boolean> {
+  const pay = opts.pay ?? true;
   let created = false;
   const seeds: [string, () => Promise<unknown>][] = [
-    [DEMO.email, () => seedNail(app, base)],
-    [FASHION.email, () => seedFashion(app, base)],
-    [DINING.email, () => seedDining(app, base)],
+    [DEMO.email, () => seedNail(app, base, pay)],
+    [FASHION.email, () => seedFashion(app, base, pay)],
+    [DINING.email, () => seedDining(app, base, pay)],
     [TRY.email, () => client(app, base)("POST", "/api/auth/register", { name: TRY.name, email: TRY.email, password: TRY.password })],
   ];
   for (const [email, seed] of seeds) {

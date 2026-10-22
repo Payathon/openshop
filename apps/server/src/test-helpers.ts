@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { createApp } from "./app.ts";
 import { connectPglite } from "./db/client.ts";
 import { FakePaymentProvider } from "./payments/fake.ts";
+import type { PaymentProvider } from "./payments/provider.ts";
 import { OpenShop } from "./shop.ts";
 import { LocalDiskStorage } from "./storage.ts";
 
@@ -19,9 +20,10 @@ export const nailSchedule = {
   closures: [],
 };
 
-export async function setup() {
+// Uses the fake cashier unless a provider is passed.
+export async function setup<P extends PaymentProvider = FakePaymentProvider>(provider?: P) {
   let now = START;
-  const payments = new FakePaymentProvider(BASE);
+  const payments = provider ?? (new FakePaymentProvider(BASE) as unknown as P);
   const db = await connectPglite();
   const shop = new OpenShop({ db, payments, clock: () => now, baseUrl: BASE });
   const storage = new LocalDiskStorage(await mkdtemp(join(tmpdir(), "openshop-uploads-")), `${BASE}/files`);

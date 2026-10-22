@@ -5,7 +5,9 @@ import { Hono } from "hono";
 import { createApp } from "./app.ts";
 import { connectPglite, connectPostgres } from "./db/client.ts";
 import { startPaymentSync } from "./jobs.ts";
+import { AlipayPagePayProvider } from "./payments/alipay.ts";
 import { FakePaymentProvider } from "./payments/fake.ts";
+import type { PaymentProvider } from "./payments/provider.ts";
 import { seedDemo } from "./seed.ts";
 import { DEMO, DINING, FASHION, seedAccounts, TRY } from "./seed-accounts.ts";
 import { OpenShop } from "./shop.ts";
@@ -19,8 +21,26 @@ const db = process.env.DATABASE_URL
   ? await connectPostgres(process.env.DATABASE_URL)
   : await connectPglite(process.env.PGLITE_DIR ?? ".data/pglite");
 
-// Real Alipay comes in M5; until then every payment goes through the fake cashier.
-const payments = new FakePaymentProvider(baseUrl);
+// ALIPAY_APP_ID turns on real Alipay (电脑网站支付) for every shop; without it payments go
+// through the fake cashier.
+function paymentProvider(): PaymentProvider {
+  if (!process.env.ALIPAY_APP_ID) return new FakePaymentProvider(baseUrl);
+  const need = (name: string) => {
+    const v = process.env[name]?.trim();
+    if (!v) throw new Error(`ALIPAY_APP_ID is set but ${name} is missing`);
+    return v;
+  };
+  return new AlipayPagePayProvider({
+    appId: need("ALIPAY_APP_ID"),
+    privateKey: need("ALIPAY_PRIVATE_KEY"),
+    alipayPublicKey: need("ALIPAY_PUBLIC_KEY"),
+    gateway: process.env.ALIPAY_GATEWAY || undefined,
+    // Alipay can only reach a public HTTPS address; locally, results come from query alone.
+    notifyUrl: baseUrl.startsWith("https://") ? `${baseUrl}/payments/alipay/notify` : undefined,
+  });
+}
+const payments = paymentProvider();
+console.log(`payments: ${payments.name}`);
 const shop = new OpenShop({ db, payments, baseUrl });
 const storage = new LocalDiskStorage(process.env.UPLOADS_DIR ?? ".data/uploads", `${baseUrl}/files`);
 
@@ -50,7 +70,7 @@ if (existsSync(webDist)) {
 // The demo accounts have published passwords, so they are only made outside production
 // unless SEED_ACCOUNTS=1 asks for them.
 const seedAccountsWanted = process.env.SEED_ACCOUNTS ? process.env.SEED_ACCOUNTS === "1" : process.env.NODE_ENV !== "production";
-if (process.env.SEED !== "0" && seedAccountsWanted && (await seedAccounts(app, baseUrl))) {
+if (process.env.SEED !== "0" && seedAccountsWanted && (await seedAccounts(app, baseUrl, { pay: payments instanceof FakePaymentProvider }))) {
   console.log(`seeded workbench accounts (${baseUrl}/admin):`);
   for (const a of [DEMO, FASHION, DINING]) console.log(`  finished shop: ${a.email} / ${a.password}  → ${baseUrl}/s/${a.slug}`);
   console.log(`  new merchant:  ${TRY.email} / ${TRY.password}`);

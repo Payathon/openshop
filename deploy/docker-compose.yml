@@ -37,6 +37,10 @@ services:
       DATABASE_URL: postgres://openshop:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/openshop
       PAYMENT_SYNC_MS: ${PAYMENT_SYNC_MS:-10000}
       SEED: ${SEED:-1}
+      ALIPAY_APP_ID: ${ALIPAY_APP_ID:-}
+      ALIPAY_PRIVATE_KEY: ${ALIPAY_PRIVATE_KEY:-}
+      ALIPAY_PUBLIC_KEY: ${ALIPAY_PUBLIC_KEY:-}
+      ALIPAY_GATEWAY: ${ALIPAY_GATEWAY:-}
     volumes:
       - uploads:/data/uploads
     depends_on:

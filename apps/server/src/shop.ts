@@ -20,6 +20,18 @@ import type { PaymentProvider } from "./payments/provider.ts";
 // A sweep normally takes well under this; if an instance dies mid-sweep, another takes over after it.
 const SWEEP_LEASE_MS = 60_000;
 
+// Runs something that needs the payment provider; its failures become an error the customer or
+// merchant can read instead of a bare 500.
+async function providerCall<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof ShopError) throw err;
+    console.error("payment provider:", err);
+    throw new ShopError(502, "payment_unavailable", "暂时连不上支付宝，请稍后再试");
+  }
+}
+
 export class ShopError extends Error {
   constructor(
     readonly status: 400 | 401 | 404 | 409 | 413 | 415 | 502,
@@ -384,10 +396,14 @@ export class OpenShop {
 
   async getOrder(orderId: string, accessToken: string) {
     const order = await this.orderForCustomer(orderId, accessToken);
-    return this.renderOrder(await this.refreshOrder(order));
+    return this.renderOrder(await this.refreshOrStale(order));
   }
 
   async cancelOrder(orderId: string, accessToken: string): Promise<RenderedOrder> {
+    return providerCall(() => this.cancelOrderNow(orderId, accessToken));
+  }
+
+  private async cancelOrderNow(orderId: string, accessToken: string): Promise<RenderedOrder> {
     const order = await this.refreshOrder(await this.orderForCustomer(orderId, accessToken));
     const [shop] = await this.db.select().from(shops).where(eq(shops.id, order.shopId));
     const decision = cancellation(order, shop!.cancelPolicy, this.clock());
@@ -395,7 +411,7 @@ export class OpenShop {
     if (order.status === "pending_payment") {
       await this.payments.closePayment(order.id);
       // Paid in the meantime: fall through to the paid path on the refreshed order.
-      if ((await this.payments.queryPayment(order.id)) === "paid") return this.cancelOrder(orderId, accessToken);
+      if ((await this.payments.queryPayment(order.id)) === "paid") return this.cancelOrderNow(orderId, accessToken);
     }
     if (decision.refund) await this.payments.refund({ orderId: order.id, amountFen: fen(order.totalFen) });
     const updated = await this.finish(order, "cancelled", { refunded: decision.refund });
@@ -405,6 +421,10 @@ export class OpenShop {
   // The merchant can cancel any order that hasn't shipped or ended, outside the customer's
   // cancellation window too (they agreed with the customer); a paid order is refunded in full.
   async merchantCancelOrder(shopId: string, orderId: string): Promise<RenderedOrder> {
+    return providerCall(() => this.merchantCancelOrderNow(shopId, orderId));
+  }
+
+  private async merchantCancelOrderNow(shopId: string, orderId: string): Promise<RenderedOrder> {
     const [found] = await this.db.select().from(orders).where(and(eq(orders.id, orderId), eq(orders.shopId, shopId)));
     if (!found) throw new ShopError(404, "order_not_found", "找不到这个订单");
     const order = await this.refreshOrder(found);
@@ -413,7 +433,7 @@ export class OpenShop {
     }
     if (order.status === "pending_payment") {
       await this.payments.closePayment(order.id);
-      if ((await this.payments.queryPayment(order.id)) === "paid") return this.merchantCancelOrder(shopId, orderId);
+      if ((await this.payments.queryPayment(order.id)) === "paid") return this.merchantCancelOrderNow(shopId, orderId);
       return this.renderOrder(await this.finish(order, "cancelled"));
     }
     await this.payments.refund({ orderId: order.id, amountFen: fen(order.totalFen) });
@@ -438,7 +458,8 @@ export class OpenShop {
   }
 
   // ---- payment sync -----------------------------------------------------
-  // Without a public notify_url we learn about payments by asking. A background sweep
+  // Alipay's notification (syncOrder) is only a hint to ask now; without a public notify_url,
+  // or when one is lost, we learn about payments by asking. A background sweep
   // (syncPayments, run by jobs.ts) asks about every unpaid order. On top of that:
   // - a customer reading or cancelling their own order refreshes just that order;
   // - stock and slot reads first settle the shop's *expired* holds, so a timed-out order never
@@ -467,12 +488,26 @@ export class OpenShop {
     }
   }
 
+  // Settles one order now, for a payment notification. Unknown ids are ignored.
+  async syncOrder(orderId: string) {
+    const [o] = await this.db.select().from(orders).where(eq(orders.id, orderId));
+    if (o) await this.refreshOrder(o);
+  }
+
   private async settleExpired(shopId: string) {
     const expired = await this.db
       .select()
       .from(orders)
       .where(and(eq(orders.shopId, shopId), eq(orders.status, "pending_payment"), lte(orders.paymentExpiresAt, this.clock())));
-    for (const o of expired) await this.refreshOrder(o);
+    for (const o of expired) await this.refreshOrStale(o);
+  }
+
+  // For reads: when the provider can't be reached, show what we have; the sweep tries again.
+  private async refreshOrStale(order: OrderRow): Promise<OrderRow> {
+    return this.refreshOrder(order).catch((err: unknown) => {
+      console.error(`payment refresh: order ${order.id}:`, err);
+      return order;
+    });
   }
 
   private async refreshOrder(order: OrderRow): Promise<OrderRow> {
@@ -556,13 +591,13 @@ export class OpenShop {
   async merchantOrder(shopId: string, orderId: string) {
     const [o] = await this.db.select().from(orders).where(and(eq(orders.id, orderId), eq(orders.shopId, shopId)));
     if (!o) throw new ShopError(404, "order_not_found", "找不到这个订单");
-    return this.renderOrder(await this.refreshOrder(o));
+    return this.renderOrder(await this.refreshOrStale(o));
   }
 
   async shipOrder(shopId: string, orderId: string, trackingNo: string) {
     // Paid moments ago and not yet swept: learn about it now rather than refuse to ship.
     const [current] = await this.db.select().from(orders).where(and(eq(orders.id, orderId), eq(orders.shopId, shopId)));
-    if (current) await this.refreshOrder(current);
+    if (current) await this.refreshOrStale(current);
     return this.db.transaction(async (tx) => {
       const [o] = await tx.select().from(orders).where(and(eq(orders.id, orderId), eq(orders.shopId, shopId))).for("update");
       if (!o) throw new ShopError(404, "order_not_found", "找不到这个订单");

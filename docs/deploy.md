@@ -11,6 +11,7 @@
 | 域名 | 一个 `.com` 等普通域名，不需要备案 | `deploy/.env` 的 `OPENSHOP_DOMAIN` 和 `PUBLIC_URL` |
 | DNS | `@` 的 A 记录指向服务器 IP。以后做店铺子域名时，再加一条 `*` 的 A 记录 | 域名服务商的解析设置 |
 | 数据库密码 | `openssl rand -hex 24` 生成 | `deploy/.env` 的 `POSTGRES_PASSWORD` |
+| 支付宝收款（可选） | 开放平台应用的 APPID、应用私钥（PKCS#1）、支付宝公钥，都填不带 PEM 头尾的原始字符串。付款通知地址（`https://<域名>/payments/alipay/notify`）随每笔下单请求发给支付宝，不用在开放平台配置。不填就用模拟收银台 | `deploy/.env` 的 `ALIPAY_*` |
 
 ## 第一次部署
 

@@ -62,7 +62,9 @@ pnpm typecheck
 - **本地 MCP**：`openshop mcp`（stdio），比 Skill 多了 `profile_get` 和 `profile_save`。
 - **远程 MCP**：服务端的 `/mcp`（Streamable HTTP），不需要登录。因为没有本地存储，agent 要自己保存下单时返回的 `accessToken`。
 
-现在用的是模拟支付：下单返回的 `paymentUrl` 是一个本地的模拟收银台页面，点"确认付款"即视为付款成功。模拟支付的状态只保存在内存里，服务重启后，之前未付款的订单会被当作过期。
+默认用模拟支付：下单返回的 `paymentUrl` 是一个本地的模拟收银台页面，点"确认付款"即视为付款成功。模拟支付的状态只保存在内存里，服务重启后，之前未付款的订单会被当作过期。
+
+设置 `ALIPAY_APP_ID`、`ALIPAY_PRIVATE_KEY`（PKCS#1，不带 PEM 头尾）、`ALIPAY_PUBLIC_KEY` 后，改用支付宝电脑网站支付（`alipay.trade.page.pay`），`paymentUrl` 是支付宝收银台链接。`ALIPAY_GATEWAY` 不设时连沙箱网关，生产环境设为 `https://openapi.alipay.com/gateway.do`。`PUBLIC_URL` 是 HTTPS 地址时，会同时让支付宝把付款结果通知到 `/payments/alipay/notify`。
 
 ## 初步 MVP 设想（已被决策记录取代）
 

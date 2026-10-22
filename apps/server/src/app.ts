@@ -9,6 +9,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { html } from "hono/html";
 import { Accounts, SESSION_TTL_MS } from "./accounts.ts";
 import { opInputSchema, type OpInput } from "./content.ts";
+import { AlipayPagePayProvider } from "./payments/alipay.ts";
 import { FakePaymentProvider } from "./payments/fake.ts";
 import type { PaymentProvider } from "./payments/provider.ts";
 import { loginSchema, newOrderSchema, newShopSchema, onboardSchema, registerSchema, scheduleSchema } from "./schemas.ts";
@@ -278,6 +279,21 @@ export function createApp(
         "cache-control": "public, max-age=31536000, immutable",
         "x-content-type-options": "nosniff",
       });
+    });
+  }
+
+  // ---- Alipay payment notifications ----------------------------------------
+
+  if (payments instanceof AlipayPagePayProvider) {
+    // notify_url. A verified notification makes us query the order now instead of at the next
+    // sweep; the query, not the notification, decides. Alipay retries until it reads "success".
+    app.post("/payments/alipay/notify", async (c) => {
+      const form = await c.req.parseBody();
+      const params = Object.fromEntries(Object.entries(form).filter((e): e is [string, string] => typeof e[1] === "string"));
+      const orderId = payments.verifyNotification(params);
+      if (!orderId) return c.text("failure", 400);
+      await shop.syncOrder(orderId);
+      return c.text("success");
     });
   }
 
