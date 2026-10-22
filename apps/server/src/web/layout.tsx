@@ -24,7 +24,7 @@ const CSS = `
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:64px}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.7 var(--font);letter-spacing:var(--track)}
-main{max-width:600px;margin:0 auto;min-height:100vh;background:var(--bg)}
+main{min-height:100vh;background:var(--bg);container-type:inline-size}
 img{max-width:100%;height:auto;display:block;background:var(--surface)}
 a{color:inherit}
 h1,h2,h3{font-family:var(--head-font);font-weight:var(--head-weight);letter-spacing:var(--track);margin:0;text-wrap:balance}
@@ -41,6 +41,7 @@ p{margin:0}
 .bar{position:sticky;top:0;z-index:4;display:grid;grid-template-columns:44px 1fr 44px;align-items:center;min-height:56px;padding:0 6px;background:var(--bg);border-bottom:1px solid var(--line)}
 .bar-title{text-align:center;font-family:var(--head-font);font-size:17px;font-weight:600;letter-spacing:.12em;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bar-btn{display:grid;place-items:center;width:44px;height:44px;color:var(--ink);text-decoration:none}
+.bar-nav,.bar-phone{display:none}
 .site-footer{padding:40px var(--gutter) 120px;border-top:1px solid var(--line);text-align:center;font-size:13px;color:var(--muted);display:grid;gap:6px}
 .site-footer a{color:var(--ink)}
 
@@ -98,7 +99,9 @@ details.week summary::after{content:"＋";color:var(--muted)}
 details.week[open] summary::after{content:"－"}
 .week dl{display:grid;grid-template-columns:auto 1fr;gap:6px 24px;margin:0 0 14px;font-size:14px}
 .week dd{margin:0;font-variant-numeric:tabular-nums}
-.week .is-today{font-weight:600}
+.week .is-today,.week-full .is-today{font-weight:600}
+.week-full{display:none;grid-template-columns:auto 1fr;gap:10px 32px;margin:0;padding:18px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);font-size:15px;align-self:start}
+.week-full dt{color:var(--muted)}.week-full dd{margin:0;font-variant-numeric:tabular-nums}
 .fine{margin-top:12px;font-size:13px;color:var(--muted)}
 
 /* gallery */
@@ -235,6 +238,94 @@ input:focus-visible,textarea:focus-visible,.pill:focus-visible,.pill:has(input:f
 [data-style=beauty] .hours+.section{padding-top:40px}
 [data-style=beauty] .hours details.week{border-color:rgba(0,0,0,.06)}
 [data-style=beauty] .slider img{aspect-ratio:1}
+
+/* ---- computers: Dawn's desktop layout. Content sits in a 1100px column (the gutter grows
+   to centre it), banners stay full-bleed, grids widen, the product page splits in two. ---- */
+@media (min-width:750px){
+  main{--gutter:max(40px,calc((100cqw - 1100px) / 2))}
+  .announce{font-size:13px;padding-block:10px}
+  .bar{display:flex;align-items:center;gap:8px;min-height:84px;padding:0 calc(var(--gutter) - 12px)}
+  .bar>span:first-child{display:none}
+  .bar-title{text-align:left;font-size:22px;padding:0 12px;flex:0 1 auto}
+  .bar-nav{display:flex;flex:1;gap:28px;padding-left:28px;font-size:15px;color:var(--muted);overflow:hidden;white-space:nowrap}
+  .bar-nav a{text-decoration:none}.bar-nav a:hover{color:var(--ink);text-decoration:underline;text-underline-offset:4px}
+  .bar-btn{display:inline-flex;align-items:center;width:auto;gap:8px;padding:0 12px;margin-left:auto}
+  .bar-phone{display:inline;font-size:15px;font-variant-numeric:tabular-nums}
+  .section{padding:72px var(--gutter)}
+  .section+.section{padding-top:16px}
+  .section-head{margin-bottom:28px}
+  .section-head h2,.section>h2{font-size:30px}
+  .section>h2{margin-bottom:28px}
+  .hero-img{aspect-ratio:16/7;max-height:620px}
+  .hero-body{padding:110px var(--gutter)}
+  .hero-title{font-size:46px}
+  .hero-sub{font-size:17px}
+  .grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:40px 12px}
+  .list{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:56px}
+  .row:nth-child(-n+2){border-top:0;padding-top:0}
+  .row:first-child{padding-top:0}
+  .row-img{width:120px;height:120px}
+  .slider{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;overflow:visible;margin:0;padding:0}
+  .slider figure{min-width:0}
+  .hours{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:56px;align-content:start}
+  .hours>h2,.hours>p{grid-column:1}
+  .hours details.week{display:none}
+  .week-full{display:grid;grid-column:2;grid-row:1 / span 5}
+  .text{max-width:calc(760px + 2 * var(--gutter));margin:0 auto}
+  .text:has(.text-img){max-width:none;grid-template-columns:1.1fr 1fr;column-gap:64px;align-items:center;text-align:left}
+  .text:has(.text-img) .text-img{grid-row:span 4;margin:0}
+  .text:has(.text-img) p{margin:0}
+  .contact{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:56px}
+  .contact>h2{grid-column:1/-1}
+  .contact-row:last-child{border-bottom:0}
+  .contact .contact-row{border-bottom:1px solid var(--line)}
+  .site-footer{padding:56px var(--gutter) 64px}
+  .notice,.narrow{max-width:760px;margin:0 auto}
+  .narrow .section{padding-inline:40px}
+  /* product page */
+  .product{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:56px;align-items:start;padding:40px var(--gutter) 80px}
+  .product.no-media{grid-template-columns:minmax(0,640px);justify-content:center}
+  .media-wrap{border-radius:var(--radius);overflow:hidden}
+  .media{display:grid;grid-template-columns:1fr 1fr;gap:10px;overflow:visible;background:none}
+  .media img{grid-column:auto;border-radius:var(--radius);background:var(--surface)}
+  .media img:first-child{grid-column:1/-1}
+  .media-count{display:none}
+  .product-info{position:sticky;top:104px}
+  .pd{padding:0 0 8px}
+  .pd h1{font-size:34px}
+  .checkout{padding:20px 0 0}
+  .pay-bar{position:static;margin-top:28px;padding:20px 0 0;background:none}
+  .pay-bar .btn{flex:0 0 60%}
+}
+@media (min-width:990px){
+  .grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .float-cta{display:none}
+}
+@media (min-width:750px){
+  [data-style=fashion] .hero-img{aspect-ratio:16/8}
+  [data-style=fashion] .hero.with-img .hero-body{padding:56px var(--gutter)}
+  [data-style=fashion] .hero-title{font-size:64px}
+  [data-style=fashion] .media img{aspect-ratio:3/4}
+  [data-style=fashion] .text{text-align:left;margin:0;max-width:none;grid-template-columns:1fr 1.4fr;column-gap:64px;align-items:start}
+  [data-style=fashion] .text>h2{grid-row:span 3}
+  [data-style=dining] .hero.with-img{display:grid;grid-template-columns:1.5fr 1fr;align-items:center;margin:32px var(--gutter) 0}
+  [data-style=dining] .hero.with-img .hero-img{aspect-ratio:16/10;max-height:none;height:100%}
+  [data-style=dining] .hero.with-img .hero-body{padding:40px}
+  [data-style=dining] .hero-title{font-size:38px}
+  [data-style=dining] .hours{max-width:720px;margin:32px auto;padding:44px 40px}
+  [data-style=dining] .hours{grid-template-columns:1fr}
+  [data-style=dining] .hours>*{grid-column:1}
+  [data-style=dining] .week-full{grid-row:auto;justify-self:center;min-width:300px;margin-top:20px;text-align:left}
+  [data-style=dining] .row-img{width:96px;height:96px}
+  [data-style=beauty] .hero.with-img{padding:24px var(--gutter) 0}
+  [data-style=beauty] .hero.with-img .hero-body{position:absolute;left:calc(var(--gutter) + 48px);bottom:48px;margin:0;max-width:440px;padding:36px 40px;box-shadow:0 10px 40px rgba(0,0,0,.08)}
+  [data-style=beauty] .hero:not(.with-img){margin:24px var(--gutter) 0}
+  [data-style=beauty] .products{margin-top:56px;padding-top:64px;padding-bottom:64px}
+  [data-style=beauty] .products .list{column-gap:16px;row-gap:16px}
+  [data-style=beauty] .products .row:nth-child(-n+2){padding:16px}
+  [data-style=beauty] .products .row{padding:16px}
+  [data-style=beauty] .hours{max-width:none;margin:56px var(--gutter) 0;padding:40px 48px}
+}
 `;
 
 const FONTS: Record<Theme["font"], string> = {
@@ -295,7 +386,7 @@ export const Icon = (p: { name: keyof typeof PATHS }) => (
 );
 
 // The shop's title bar: back (on inner pages), the name in the middle, and a call button.
-export function TitleBar(p: { shop: PublicShop; home: string; back?: string | undefined }) {
+export function TitleBar(p: { shop: PublicShop; home: string; back?: string | undefined; links?: { href: string; label: string }[] }) {
   return (
     <div class="bar">
       {p.back ? (
@@ -308,8 +399,15 @@ export function TitleBar(p: { shop: PublicShop; home: string; back?: string | un
       <a class="bar-title" href={p.home}>
         {p.shop.name}
       </a>
+      {/* Computers only: the page's sections as a menu. */}
+      <nav class="bar-nav" aria-label="店铺导航">
+        {(p.links ?? []).map((l) => (
+          <a href={l.href}>{l.label}</a>
+        ))}
+      </nav>
       <a class="bar-btn" href={`tel:${p.shop.phone}`} aria-label={`打电话给店铺 ${p.shop.phone}`}>
         <Icon name="phone" />
+        <span class="bar-phone">{p.shop.phone}</span>
       </a>
     </div>
   );

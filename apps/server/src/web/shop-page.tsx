@@ -12,6 +12,7 @@ export interface PageCtx {
   products: PublicProduct[];
   urls: ShopUrls;
   now: Date;
+  sections: PageConfig["sections"];
   // Set on preview links: shows what the merchant still needs to fill in, and sample badges.
   preview: { samples: Set<string> } | null;
 }
@@ -29,10 +30,18 @@ function fromPrice(p: PublicProduct) {
 const soldOut = (p: PublicProduct) => p.fulfillment === "shipping" && p.variants.every((v) => v.stock === 0);
 
 // The announcement line, then the sticky title bar.
-const header: Render<"header"> = (s, { shop, urls }) => (
+// Section titles worth jumping to, for the title bar's menu on computers.
+const NAV_TYPES = new Set(["products", "booking", "gallery", "text", "contact"]);
+const navLinks = (sections: PageConfig["sections"]) =>
+  sections
+    .filter((s) => NAV_TYPES.has(s.type) && "title" in s.props && s.props.title)
+    .slice(0, 5)
+    .map((s) => ({ href: `#${s.id}`, label: (s.props as { title: string }).title }));
+
+const header: Render<"header"> = (s, { shop, urls, sections }) => (
   <>
     {s.props.showDescription && shop.description ? <p class="announce">{shop.description}</p> : null}
-    <TitleBar shop={shop} home={urls.shop} />
+    <TitleBar shop={shop} home={urls.shop} links={navLinks(sections)} />
   </>
 );
 
@@ -136,6 +145,14 @@ const booking: Render<"booking"> = (s, { shop, preview, now }) => {
   const today = weekly.filter((h) => h.weekday === weekday);
   const openNow = today.some((h) => h.open <= hhmm && hhmm < h.close);
   const todayText = today.length ? today.map((h) => `${h.open}–${h.close}`).join("，") : null;
+  const days = weekly.map((h) => (
+    <>
+      <dt class={h.weekday === weekday ? "is-today" : undefined}>{WEEKDAYS[h.weekday]}</dt>
+      <dd class={h.weekday === weekday ? "is-today" : undefined}>
+        {h.open}–{h.close}
+      </dd>
+    </>
+  ));
   return (
     <section class="section hours" id={s.id}>
       {s.props.title ? <h2>{s.props.title}</h2> : null}
@@ -143,19 +160,12 @@ const booking: Render<"booking"> = (s, { shop, preview, now }) => {
         <span class={openNow ? "dot open" : "dot"} />
         {openNow ? `营业中 · 今天 ${todayText}` : todayText ? `今天 ${todayText}` : "今天休息"}
       </p>
+      {/* Folded on phones; computers have room to show the whole week. */}
       <details class="week">
         <summary>每周营业时间</summary>
-        <dl>
-          {weekly.map((h) => (
-            <>
-              <dt class={h.weekday === weekday ? "is-today" : undefined}>{WEEKDAYS[h.weekday]}</dt>
-              <dd class={h.weekday === weekday ? "is-today" : undefined}>
-                {h.open}–{h.close}
-              </dd>
-            </>
-          ))}
-        </dl>
+        <dl>{days}</dl>
       </details>
+      <dl class="week-full">{days}</dl>
       {s.props.note ? <p class="fine">{s.props.note}</p> : null}
       <p class="fine">预约开始前 {shop.cancelPolicy.freeCancelHoursBefore} 小时以上可免费取消，自动退款。</p>
     </section>
@@ -234,7 +244,7 @@ const FLOAT_SCRIPT = `(() => {
   }).observe(target);
 })();`;
 
-export function ShopPage(ctx: PageCtx & { page: PageConfig }) {
+export function ShopPage(ctx: Omit<PageCtx, "sections"> & { page: PageConfig }) {
   const { shop, urls, preview } = ctx;
   const list = ctx.page.sections.find((s) => s.type === "products");
   const books = ctx.products.some((p) => p.fulfillment === "booking");
@@ -256,7 +266,7 @@ export function ShopPage(ctx: PageCtx & { page: PageConfig }) {
       }
     >
       {preview ? <PreviewBar /> : null}
-      {ctx.page.sections.map((s) => (RENDER[s.type] as Render<SectionType>)(s, ctx))}
+      {ctx.page.sections.map((s) => (RENDER[s.type] as Render<SectionType>)(s, { ...ctx, sections: ctx.page.sections }))}
       <footer class="site-footer">
         {preview ? null : (
           <p>

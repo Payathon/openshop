@@ -51,6 +51,7 @@ export function OrderPage(p: {
   return (
     <Layout title={`${shown.statusText} - ${shop.name}`} theme={p.theme}>
       <TitleBar shop={shop} home={urls.shop} back={urls.shop} />
+      <div class="narrow">
       <section class="section order-head" id="order-status" data-status={order.status} data-url={`${urls.shop}/orders/${order.id}/status`}>
         <h1 class={`status ${TONE[order.status]}`}>{shown.statusText}</h1>
         {pending && order.paymentUrl ? (
@@ -121,6 +122,7 @@ export function OrderPage(p: {
           <Cancel order={order} shop={shop} urls={urls} decision={p.cancel} />
         </div>
       ) : null}
+      </div>
       {pending ? <script dangerouslySetInnerHTML={{ __html: ORDER_SCRIPT }} /> : null}
       {p.cancel?.allowed ? <script dangerouslySetInnerHTML={{ __html: CANCEL_SCRIPT }} /> : null}
     </Layout>
