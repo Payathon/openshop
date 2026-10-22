@@ -6,6 +6,7 @@ import {
   parseTheme,
   productInputSchema,
   sectionLabel,
+  STYLES,
   themeSchema,
   type CancelPolicy,
   type Fulfillment,
@@ -371,6 +372,7 @@ export function describeOp(before: Content, op: Op): string {
       const t = before.page.theme;
       const n = { ...t, ...op.patch };
       parts = [
+        ...(n.style !== t.style ? [`模板 ${STYLES[t.style].label}→${STYLES[n.style].label}`] : []),
         ...(n.primary.toLowerCase() !== t.primary.toLowerCase()
           ? [colorName(n.primary) === colorName(t.primary) ? `主色 ${t.primary}→${n.primary}` : `主色 ${colorName(t.primary)}→${colorName(n.primary)}`]
           : []),

@@ -31,12 +31,16 @@ pnpm test            # 全部测试
 pnpm typecheck
 ```
 
-打开 http://localhost:8788 会进入商家后台。首次启动会自动准备两个账号，密码都是 `openshop123`：
+打开 http://localhost:8788 会进入商家后台。首次启动会自动准备四个账号，密码都是 `openshop123`：
 
 | 账号 | 状态 | 用来做什么 |
 |---|---|---|
-| `demo@openshop.dev` | 已经走完注册、开店表单、换商品、装修、发布的全流程，有几笔订单 | 看一家建好的店：后台各页面，以及它的店铺网站 http://localhost:8788/s/moon-nail |
+| `demo@openshop.dev` | 美甲店，走完了注册、开店表单、换商品、装修、发布的全流程，有几笔订单。用“简约”模板 | 看一家建好的店：后台各页面，以及它的店铺网站 http://localhost:8788/s/moon-nail |
+| `fashion@openshop.dev` | 服装店，用“服装”模板，卖快递商品 | http://localhost:8788/s/baiyi |
+| `food@openshop.dev` | 餐厅，用“餐厅”模板，订座、套餐，也卖辣椒酱 | http://localhost:8788/s/xiangkou |
 | `try@openshop.dev` | 只注册了，还没有店 | 自己从开店向导开始体验。也可以在登录页点“免费开店”注册新账号 |
+
+店铺网站有四个模板：简约、服装、餐厅、美业。开店时选一个（默认按行业推荐），之后在“店铺装修”里随时能换，内容不受影响。
 
 数据存在 `apps/server/.data/`，删掉这个目录就能从头再来。
 

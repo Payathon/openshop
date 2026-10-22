@@ -52,6 +52,7 @@ export interface Section {
 }
 
 export interface Theme {
+  style: "minimal" | "fashion" | "dining" | "beauty";
   primary: string;
   font: "system" | "rounded" | "serif";
   radius: "square" | "soft" | "round";

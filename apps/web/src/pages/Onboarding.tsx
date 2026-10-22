@@ -1,17 +1,19 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { get, message, post } from "../api.ts";
+import type { Theme } from "../studio.tsx";
+import { TemplatePicker } from "../templates.tsx";
 import { Banner, Card, Field } from "../ui.tsx";
 
-// product-decisions #6: pick an industry and modules, fill in the basics, and get a working
-// site with sample content right away.
+// product-decisions #6: pick an industry, a template and modules, fill in the basics, and get
+// a working site with sample content right away.
 
 interface Templates {
-  industries: { key: string; label: string; modules: string[] }[];
+  industries: { key: string; label: string; modules: string[]; style: Theme["style"] }[];
   modules: Record<string, string>;
 }
 
-const EMOJI: Record<string, string> = { nail: "💅", hair: "💇", fitness: "🏋️", photo: "📷", bakery: "🍪", generic: "🏪" };
+const EMOJI: Record<string, string> = { nail: "💅", hair: "💇", fitness: "🏋️", photo: "📷", bakery: "🍪", fashion: "👗", restaurant: "🍜", generic: "🏪" };
 
 const MODULE_HELP: Record<string, string> = {
   booking: "顾客选时间预约，比如美甲、理发、私教课",
@@ -27,6 +29,7 @@ export function Onboarding(props: { onDone: () => Promise<void> }) {
   const [step, setStep] = useState(0);
   const [industry, setIndustry] = useState<string | null>(null);
   const [modules, setModules] = useState<string[]>([]);
+  const [style, setStyle] = useState<Theme["style"] | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
@@ -40,7 +43,9 @@ export function Onboarding(props: { onDone: () => Promise<void> }) {
 
   const pick = (key: string) => {
     setIndustry(key);
-    setModules(templates?.industries.find((i) => i.key === key)?.modules ?? []);
+    const chosen = templates?.industries.find((i) => i.key === key);
+    setModules(chosen?.modules ?? []);
+    setStyle(chosen?.style ?? "minimal");
     setStep(1);
   };
   const toggle = (m: string) => setModules((ms) => (ms.includes(m) ? ms.filter((x) => x !== m) : [...ms, m]));
@@ -55,6 +60,7 @@ export function Onboarding(props: { onDone: () => Promise<void> }) {
       await post("/api/onboarding", {
         industry,
         modules,
+        ...(style ? { style } : {}),
         name: name.trim(),
         phone,
         ...(address.trim() ? { address: address.trim() } : {}),
@@ -75,8 +81,8 @@ export function Onboarding(props: { onDone: () => Promise<void> }) {
           <img src="/admin/icon.svg" alt="" />
           开一家店
         </div>
-        <div className="steps" aria-label={`第 ${step + 1} 步，共 3 步`}>
-          {[0, 1, 2].map((i) => (
+        <div className="steps" aria-label={`第 ${step + 1} 步，共 4 步`}>
+          {[0, 1, 2, 3].map((i) => (
             <span key={i} className={i <= step ? "done" : ""} />
           ))}
         </div>
@@ -100,7 +106,22 @@ export function Onboarding(props: { onDone: () => Promise<void> }) {
           </Card>
         )}
 
-        {step === 1 && templates && (
+        {step === 1 && (
+          <Card title="选一个模板">
+            <p className="muted">已经按你的行业选好了一个。模板只管样子，开店后在“店铺装修”里随时能换，内容不会丢。</p>
+            <TemplatePicker value={style} onPick={setStyle} selectedText="已选" />
+            <div className="row between">
+              <button className="btn" onClick={() => setStep(0)}>
+                上一步
+              </button>
+              <button className="btn primary" onClick={() => setStep(2)}>
+                下一步
+              </button>
+            </div>
+          </Card>
+        )}
+
+        {step === 2 && templates && (
           <Card title="店里需要哪些功能？">
             <p className="muted">已经按你的行业勾好了常用的。店铺信息和联系方式每家店都有。</p>
             <div className="stack">
@@ -116,17 +137,17 @@ export function Onboarding(props: { onDone: () => Promise<void> }) {
             </div>
             {!sells && <Banner tone="warning">没选“预约”或“购买”的话，顾客只能看，不能下单。</Banner>}
             <div className="row between">
-              <button className="btn" onClick={() => setStep(0)}>
+              <button className="btn" onClick={() => setStep(1)}>
                 上一步
               </button>
-              <button className="btn primary" onClick={() => setStep(2)}>
+              <button className="btn primary" onClick={() => setStep(3)}>
                 下一步
               </button>
             </div>
           </Card>
         )}
 
-        {step === 2 && (
+        {step === 3 && (
           <Card title="店铺的基本信息">
             <form className="stack" onSubmit={submit}>
               <Field label="店名">
@@ -142,7 +163,7 @@ export function Onboarding(props: { onDone: () => Promise<void> }) {
                 <input className="input" maxLength={200} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="比如：日系美甲，一人工作室，需提前预约" />
               </Field>
               <div className="row between">
-                <button type="button" className="btn" onClick={() => setStep(1)}>
+                <button type="button" className="btn" onClick={() => setStep(2)}>
                   上一步
                 </button>
                 <button className="btn primary large" disabled={busy}>

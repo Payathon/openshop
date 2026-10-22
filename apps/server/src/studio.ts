@@ -1,6 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { and, asc, desc, eq, inArray, notInArray } from "drizzle-orm";
-import { defaultPage, MODULE_KEYS, parsePage, TEMPLATES, templatePage, templateSamples, type Module, type PageConfig } from "@openshop/core";
+import { defaultPage, MODULE_KEYS, parsePage, TEMPLATES, templatePage, templateSamples, type Module, type PageConfig, type Style } from "@openshop/core";
 import { applyOp, describeOp, fromInput, opTarget, resolveOp, type Content, type Op, type OpInput, type ProductContent } from "./content.ts";
 import type { Db } from "./db/client.ts";
 import { changesetOps, changesets, products, publishes, shopPages, shops, variants, type StoredSchedule } from "./db/schema.ts";
@@ -23,6 +23,7 @@ const sameProduct = (a: ProductContent, b: ProductContent) =>
 export interface OnboardInput {
   industry: string;
   modules?: Module[] | undefined;
+  style?: Style | undefined;
   name: string;
   phone: string;
   address?: string | undefined;
@@ -84,7 +85,7 @@ export class Studio {
     await this.db.transaction(async (tx) => {
       const { row, content } = await loadContent(tx as unknown as Db, created.shop.id, true);
       const samples = templateSamples(template, modules).map((p) => fromInput(newId("prod"), p, [], newId, true));
-      await this.writeContent(tx as unknown as Db, row, content, { ...content, page: templatePage(template, modules), products: samples });
+      await this.writeContent(tx as unknown as Db, row, content, { ...content, page: templatePage(template, modules, input.style), products: samples });
     });
     return { ...(await this.overview(created.shop.id)), merchantToken: created.merchantToken };
   }

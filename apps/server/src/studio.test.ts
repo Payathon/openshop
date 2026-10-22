@@ -135,7 +135,7 @@ describe("changes and publishing", () => {
 
     await t.ok("POST", "/api/merchant/publish", { token });
     const live = await page(t, "/s/nail-studio");
-    expect(live.text.indexOf("周末 7 折")).toBeLessThan(live.text.indexOf("小美美甲</h1>"));
+    expect(live.text.indexOf("周末 7 折")).toBeLessThan(live.text.indexOf("小美美甲</a>"));
   });
 
   it("undoes a change together with later changes built on it", async () => {

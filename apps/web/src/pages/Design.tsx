@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { message, request } from "../api.ts";
 import { useStudio, type Product, type Section, type Theme } from "../studio.tsx";
+import { TemplatePicker, templatePatch } from "../templates.tsx";
 import { Badge, Card, Empty, Field, Page, useToast } from "../ui.tsx";
 
 // Section types as defined in @openshop/core (page.ts). Labels match the server's change list.
@@ -26,11 +27,20 @@ const ADDABLE: { type: string; props: Record<string, unknown>; help: string }[] 
 
 const COLORS = ["#d6336c", "#e8590c", "#f59f00", "#2f9e44", "#1a7f5a", "#1c7ed6", "#5f3dc4", "#212529"];
 
+function TemplateCard(props: { theme: Theme }) {
+  const { propose } = useStudio();
+  return (
+    <Card title="模板" action={<span className="subtle">换模板不会改动内容</span>}>
+      <TemplatePicker value={props.theme.style} onPick={(key) => void propose({ kind: "theme.update", patch: templatePatch(key) }, { quiet: true })} />
+    </Card>
+  );
+}
+
 function ThemeCard(props: { theme: Theme }) {
   const { propose } = useStudio();
   const set = (patch: Partial<Theme>) => void propose({ kind: "theme.update", patch }, { quiet: true });
   return (
-    <Card title="风格">
+    <Card title="颜色和字体">
       <Field label="主色">
         <div className="swatches">
           {COLORS.map((c) => (
@@ -392,6 +402,7 @@ export function Design() {
     >
       <div className="design">
         <div className="col">
+          <TemplateCard theme={overview.page.theme} />
           <ThemeCard theme={overview.page.theme} />
           <SectionsCard sections={overview.page.sections} products={overview.products} />
         </div>

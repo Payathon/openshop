@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { STYLE_KEYS } from "@openshop/core";
 
 // Request bodies shared by the JSON API and the web checkout.
 
@@ -18,6 +19,8 @@ const slug = z.string().regex(/^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$/, "店铺�
 export const onboardSchema = z.object({
   industry: z.string(),
   modules: z.array(z.enum(["booking", "shopping", "banner", "gallery", "text"])).optional(),
+  // A template other than the industry's own.
+  style: z.enum(STYLE_KEYS).optional(),
   name: z.string().min(1).max(50),
   phone,
   address: z.string().max(200).optional(),

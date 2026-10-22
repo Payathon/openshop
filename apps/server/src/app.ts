@@ -3,7 +3,7 @@ import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { Buyer } from "@openshop/client/buyer";
 import { createMcpServer } from "@openshop/client/mcp";
-import { MODULES, productInputSchema, TEMPLATES, type OrderStatus } from "@openshop/core";
+import { MODULES, productInputSchema, STYLES, TEMPLATES, type OrderStatus } from "@openshop/core";
 import { bodyLimit } from "hono/body-limit";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { Accounts, SESSION_TTL_MS } from "./accounts.ts";
@@ -74,8 +74,9 @@ export function createApp(
   });
   app.get("/api/templates", (c) =>
     c.json({
-      industries: Object.values(TEMPLATES).map((t) => ({ key: t.key, label: t.label, modules: t.modules })),
+      industries: Object.values(TEMPLATES).map((t) => ({ key: t.key, label: t.label, modules: t.modules, style: t.theme.style ?? "minimal" })),
       modules: MODULES,
+      styles: Object.entries(STYLES).map(([key, s]) => ({ key, label: s.label, description: s.description })),
     }),
   );
 

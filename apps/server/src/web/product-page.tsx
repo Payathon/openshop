@@ -1,6 +1,6 @@
 /** @jsxImportSource hono/jsx */
 import type { Theme } from "@openshop/core";
-import { Img, jsonForScript, Layout, PreviewBar, price, variantLabel, WEEKDAYS, type PublicProduct, type PublicShop } from "./layout.tsx";
+import { Img, jsonForScript, Layout, PreviewBar, price, TitleBar, variantLabel, WEEKDAYS, type PublicProduct, type PublicShop } from "./layout.tsx";
 import type { ShopUrls } from "./discovery.ts";
 import { CHECKOUT_SCRIPT } from "./scripts.ts";
 
@@ -28,33 +28,40 @@ export function ProductPage(p: {
   preview?: { sample: boolean } | undefined;
 }) {
   const { shop, product, urls } = p;
+  const prices = product.variants.map((v) => v.priceFen);
+  const low = Math.min(...prices);
   const head = (
     <>
-      <p class="small">
-        <a href={urls.shop}>← {shop.name}</a>
-      </p>
+      <TitleBar shop={shop} home={urls.shop} back={urls.shop} />
       {product.images.length > 0 ? (
-        <div class="photos">
-          {product.images.map((src, i) => (
-            <Img src={src} alt={product.name} width={480} height={360} eager={i === 0} />
-          ))}
+        <div class="media-wrap">
+          <div class="media">
+            {product.images.map((src, i) => (
+              <Img src={src} alt={product.name} width={600} height={600} eager={i === 0} />
+            ))}
+          </div>
+          {product.images.length > 1 ? <span class="media-count">共 {product.images.length} 张，左右滑动</span> : null}
         </div>
       ) : null}
-      <h1>
-        {product.name}
-        {p.preview?.sample ? <span class="badge">示例</span> : null}
-      </h1>
-      {product.description ? <p class="muted">{product.description}</p> : null}
-      {product.info.length > 0 ? (
-        <dl class="rows small">
-          {product.info.map((i) => (
-            <>
-              <dt>{i.label}</dt>
-              <dd>{i.value}</dd>
-            </>
-          ))}
-        </dl>
-      ) : null}
+      <div class="pd">
+        <p class="pd-vendor">{shop.name}</p>
+        <h1>
+          {product.name}
+          {p.preview?.sample ? <span class="badge">示例</span> : null}
+        </h1>
+        <p class="price">{prices.some((x) => x !== low) ? `${price(low)} 起` : price(low)}</p>
+        {product.description ? <p class="pd-desc">{product.description}</p> : null}
+        {product.info.length > 0 ? (
+          <dl class="facts">
+            {product.info.map((i) => (
+              <>
+                <dt>{i.label}</dt>
+                <dd>{i.value}</dd>
+              </>
+            ))}
+          </dl>
+        ) : null}
+      </div>
     </>
   );
 
@@ -63,21 +70,25 @@ export function ProductPage(p: {
       <Layout title={`预览：${product.name} - ${shop.name}`} theme={p.theme} head={<meta name="robots" content="noindex" />}>
         <PreviewBar />
         {head}
-        <section class="card">
-          {product.variants.map((v) => (
-            <p class="price">
-              {variantLabel(v.attributes) ? `${variantLabel(v.attributes)} · ` : ""}
-              {price(v.priceFen)}
-            </p>
-          ))}
-          <p class="muted small">预览里不能下单。发布后，顾客在这里选{product.fulfillment === "booking" ? "时间" : "规格和数量"}并付款。</p>
-        </section>
+        <div class="checkout">
+          {product.variants.length > 1 ? (
+            <div class="pills">
+              {product.variants.map((v) => (
+                <span class="pill">
+                  {variantLabel(v.attributes)} · {price(v.priceFen)}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          <p class="hint">预览里不能下单。发布后，顾客在这里选{product.fulfillment === "booking" ? "时间" : "规格和数量"}并付款。</p>
+        </div>
       </Layout>
     );
   }
   const booking = product.fulfillment === "booking";
   const days = booking ? bookingDays(shop, p.now) : [];
   const single = product.variants.length === 1 && Object.keys(product.variants[0]!.attributes).length === 0;
+  const variantName = single ? "" : Object.keys(product.variants[0]!.attributes).join(" / ") || "规格";
   const data = {
     fulfillment: product.fulfillment,
     availability: `${urls.server}/api/s/${shop.slug}/availability`,
@@ -89,68 +100,86 @@ export function ProductPage(p: {
     <Layout title={`${product.name} - ${shop.name}`} description={product.description || `${shop.name} 的 ${product.name}`} theme={p.theme}>
       {head}
 
-      <form id="checkout" class="card">
-        <div class={single ? "" : "chips"} role={single ? undefined : "radiogroup"} aria-label="规格">
-          {product.variants.map((v, i) =>
-            single ? (
-              <>
-                <input type="hidden" name="variant" value={v.id} />
-                <p class="price">{price(v.priceFen)}</p>
-              </>
-            ) : (
-              <label class="chip">
-                <input type="radio" name="variant" value={v.id} checked={i === 0} />
-                {variantLabel(v.attributes)} · {price(v.priceFen)}
-              </label>
-            ),
-          )}
-        </div>
+      <form id="checkout" class="checkout">
+        {single ? (
+          <input type="hidden" name="variant" value={product.variants[0]!.id} />
+        ) : (
+          <fieldset>
+            <legend>{variantName}</legend>
+            <div class="pills">
+              {product.variants.map((v, i) => (
+                <label class="pill">
+                  <input type="radio" name="variant" value={v.id} checked={i === 0} />
+                  {variantLabel(v.attributes)}
+                  {prices.some((x) => x !== low) ? <small>{price(v.priceFen)}</small> : null}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
 
-        {product.orderOptions.map((o) => (
-          <div>
-            <p class="label">
-              {o.label}
-              {o.required ? "" : "（选填）"}
-            </p>
-            {o.type === "choice" ? (
-              <div class="chips" role="radiogroup" aria-label={o.label}>
+        {product.orderOptions.map((o) =>
+          o.type === "choice" ? (
+            <fieldset>
+              <legend>
+                {o.label}
+                {o.required ? "" : "（选填）"}
+              </legend>
+              <div class="pills">
                 {o.choices.map((choice) => (
-                  <label class="chip">
+                  <label class="pill">
                     <input type="radio" name={`opt:${o.key}`} value={choice} required={o.required} />
                     {choice}
                   </label>
                 ))}
               </div>
-            ) : (
-              <input type="text" name={`opt:${o.key}`} maxlength={200} required={o.required} aria-label={o.label} />
-            )}
-          </div>
-        ))}
+            </fieldset>
+          ) : (
+            <label class="field">
+              <span>
+                {o.label}
+                {o.required ? "" : "（选填）"}
+              </span>
+              <input type="text" name={`opt:${o.key}`} maxlength={200} required={o.required} />
+            </label>
+          ),
+        )}
 
         {booking ? (
           <>
-            <p class="label">日期</p>
-            <div class="days">
-              {days.map((d) => (
-                <button type="button" class="chip" data-date={d.date} disabled={!d.open} title={d.open ? undefined : "不营业"}>
-                  {d.name}
-                  <br />
-                  <span class="small">{d.md}</span>
-                </button>
-              ))}
-            </div>
-            <p class="label">时间（约 {product.durationMinutes} 分钟）</p>
-            <div class="chips" id="slots">
-              <span class="muted small">先选一个日期</span>
-            </div>
-            <input type="hidden" name="slotStart" />
+            <fieldset>
+              <legend>日期</legend>
+              <div class="pills days">
+                {days.map((d) => (
+                  <button type="button" class="pill" data-date={d.date} disabled={!d.open} title={d.open ? undefined : "不营业"}>
+                    {d.name}
+                    <small>{d.md}</small>
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend>时间（约 {product.durationMinutes} 分钟）</legend>
+              <div class="pills" id="slots">
+                <span class="muted small">先选一个日期</span>
+              </div>
+              <input type="hidden" name="slotStart" />
+            </fieldset>
           </>
         ) : (
           <label class="field">
             <span>
               数量 <span id="stock" class="small"></span>
             </span>
-            <input type="number" name="quantity" value="1" min="1" max="99" inputmode="numeric" required />
+            <span class="qty">
+              <button type="button" data-step="-1" aria-label="减一件">
+                −
+              </button>
+              <input type="number" name="quantity" value="1" min="1" max="99" inputmode="numeric" required />
+              <button type="button" data-step="1" aria-label="加一件">
+                +
+              </button>
+            </span>
           </label>
         )}
 
@@ -175,14 +204,22 @@ export function ProductPage(p: {
           </>
         )}
 
-        <p class="error" id="error" role="alert"></p>
-        <button type="submit" class="btn block">
-          去支付
-        </button>
-        <p class="muted small" style="text-align:center;margin:10px 0 0">
+        <p class="fine">
           {booking ? `时段为您保留 15 分钟，付款后预约生效。预约开始前 ${shop.cancelPolicy.freeCancelHoursBefore} 小时以上可免费取消。` : "库存为您保留 15 分钟，付款后店家发货。"}
         </p>
+        <p class="error" id="error" role="alert"></p>
       </form>
+      <div class="pay-bar">
+        <p class="total">
+          <span class="muted small">合计</span>
+          <strong id="total" class="price">
+            {price(product.variants[0]!.priceFen)}
+          </strong>
+        </p>
+        <button type="submit" form="checkout" class="btn">
+          {booking ? "预约并支付" : "去支付"}
+        </button>
+      </div>
       <script type="application/json" id="checkout-data" dangerouslySetInnerHTML={{ __html: jsonForScript(data) }} />
       <script dangerouslySetInnerHTML={{ __html: CHECKOUT_SCRIPT }} />
     </Layout>

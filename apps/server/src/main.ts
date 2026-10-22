@@ -7,7 +7,7 @@ import { connectPglite, connectPostgres } from "./db/client.ts";
 import { startPaymentSync } from "./jobs.ts";
 import { FakePaymentProvider } from "./payments/fake.ts";
 import { seedDemo } from "./seed.ts";
-import { DEMO, seedAccounts, TRY } from "./seed-accounts.ts";
+import { DEMO, DINING, FASHION, seedAccounts, TRY } from "./seed-accounts.ts";
 import { OpenShop } from "./shop.ts";
 import { LocalDiskStorage } from "./storage.ts";
 
@@ -53,7 +53,7 @@ if (existsSync(webDist)) {
 const seedAccountsWanted = process.env.SEED_ACCOUNTS ? process.env.SEED_ACCOUNTS === "1" : process.env.NODE_ENV !== "production";
 if (process.env.SEED !== "0" && seedAccountsWanted && (await seedAccounts(app, baseUrl))) {
   console.log(`seeded workbench accounts (${baseUrl}/admin):`);
-  console.log(`  finished shop: ${DEMO.email} / ${DEMO.password}  → ${baseUrl}/s/${DEMO.slug}`);
+  for (const a of [DEMO, FASHION, DINING]) console.log(`  finished shop: ${a.email} / ${a.password}  → ${baseUrl}/s/${a.slug}`);
   console.log(`  new merchant:  ${TRY.email} / ${TRY.password}`);
 }
 

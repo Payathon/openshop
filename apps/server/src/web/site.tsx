@@ -90,7 +90,7 @@ export function shopSite(shop: OpenShop, studio: Studio) {
   site.get("/", async (c) => {
     const v = await live(c);
     const products = await shop.listProducts(v.shop.slug);
-    return page(c, <ShopPage shop={v.shop} products={products} urls={v.urls} page={v.page} preview={null} />);
+    return page(c, <ShopPage shop={v.shop} products={products} urls={v.urls} now={shop.now()} page={v.page} preview={null} />);
   });
 
   site.get("/p/:productId", async (c) => {
@@ -101,7 +101,7 @@ export function shopSite(shop: OpenShop, studio: Studio) {
 
   site.get("/preview/:token", async (c) => {
     const v = await preview(c);
-    return page(c, <ShopPage shop={v.shop} products={v.products} urls={v.urls} page={v.page} preview={{ samples: v.samples }} />);
+    return page(c, <ShopPage shop={v.shop} products={v.products} urls={v.urls} now={shop.now()} page={v.page} preview={{ samples: v.samples }} />);
   });
 
   site.get("/preview/:token/p/:productId", async (c) => {

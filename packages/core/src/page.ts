@@ -127,7 +127,22 @@ export type SectionOf<T extends SectionType> = Extract<Section, { type: T }>;
 
 export const sectionLabel = (type: SectionType) => SECTIONS[type].label;
 
+// Templates restyle the same sections; switching one never touches content. Each comes with
+// the font and corners it looks best in, which the merchant can still change.
+export const STYLES = {
+  minimal: { label: "简约", description: "黑白配色、大留白，什么店都合适", font: "system", radius: "square" },
+  fashion: { label: "服装", description: "满屏大图和竖版商品图，适合服装鞋包", font: "system", radius: "square" },
+  dining: { label: "餐厅", description: "菜单式价目表，营业时间放在显眼处", font: "serif", radius: "soft" },
+  beauty: { label: "美业", description: "柔和的色块和圆角卡片，适合美甲美发", font: "rounded", radius: "round" },
+} as const satisfies Record<string, { label: string; description: string; font: "system" | "rounded" | "serif"; radius: "square" | "soft" | "round" }>;
+export type Style = keyof typeof STYLES;
+export const STYLE_KEYS = Object.keys(STYLES) as [Style, ...Style[]];
+
+// A template with its own font and corners, for switching templates in one change.
+export const styleTheme = (style: Style): Pick<Theme, "style" | "font" | "radius"> => ({ style, font: STYLES[style].font, radius: STYLES[style].radius });
+
 export const themeSchema = z.object({
+  style: z.enum(STYLE_KEYS).default("minimal"),
   primary: z.string().regex(/^#[0-9a-fA-F]{6}$/, "主色必须是 #RRGGBB 格式").default("#d6336c"),
   font: z.enum(["system", "rounded", "serif"]).default("system"),
   radius: z.enum(["square", "soft", "round"]).default("soft"),

@@ -1,0 +1,70 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>body{margin:0}.art{display:block}</style>
+<body>
+<script>
+// Flat illustrations for the demo clothing shop and restaurant. Each <svg> gets an id; shoot.mjs screenshots them.
+const defs = `<defs>
+<filter id="sh" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-opacity=".18"/></filter>
+<filter id="sh2" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-opacity=".25"/></filter>
+<pattern id="stripe" width="14" height="14" patternUnits="userSpaceOnUse"><rect width="14" height="14" fill="#f4f1ea"/><rect width="5" height="14" fill="#5b7db1"/></pattern>
+<pattern id="knit" width="10" height="10" patternUnits="userSpaceOnUse"><rect width="10" height="10" fill="#b7553f"/><path d="M0 5 l5 -4 l5 4" stroke="#a24836" stroke-width="1.5" fill="none"/></pattern>
+<pattern id="wood" width="400" height="40" patternUnits="userSpaceOnUse"><rect width="400" height="40" fill="#b88a5e"/><path d="M0 20 q100 -8 200 0 t200 0" stroke="#a87a4f" stroke-width="3" fill="none"/><path d="M0 38 h400" stroke="#9c6f45" stroke-width="2"/></pattern>
+<pattern id="cloth" width="40" height="40" patternUnits="userSpaceOnUse"><rect width="40" height="40" fill="#f3ece0"/><rect width="20" height="20" fill="#e9dcc8"/><rect x="20" y="20" width="20" height="20" fill="#e9dcc8"/></pattern>
+</defs>`;
+const svg = (id, w, h, body) => document.body.insertAdjacentHTML("beforeend", `<svg class="art" id="${id}" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">${defs}${body}</svg>`);
+
+// ---------- clothes, 600x800 ----------
+const hanger = (x, y) => `<path d="M${x} ${y-70} q0 -14 12 -14 q12 0 12 12 q0 10 -12 16 v10" stroke="#8a8a8a" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M${x+12} ${y-50} L${x-95} ${y} h214 Z" stroke="#8a8a8a" stroke-width="5" fill="none" stroke-linejoin="round"/>`;
+const garment = (fill, opts = {}) => {
+  const len = opts.len ?? 330;
+  return `<g filter="url(#sh)">
+    <path d="M200 260 L300 230 L400 260 L470 300 L505 ${opts.short ? 380 : 520} L455 ${opts.short ? 395 : 535} L425 360 L425 ${260+len} L175 ${260+len} L175 360 L145 ${opts.short ? 395 : 535} L95 ${opts.short ? 380 : 520} L130 300 Z" fill="${fill}"/>
+    ${opts.collar ?? `<path d="M255 245 q45 40 90 0" stroke="rgba(0,0,0,.18)" stroke-width="6" fill="none"/>`}
+    ${opts.extra ?? ""}
+  </g>`;
+};
+const studio = (bg, floor) => `<rect width="600" height="800" fill="${bg}"/><rect y="700" width="600" height="100" fill="${floor}"/>`;
+
+svg("hoodie", 600, 800, studio("#ece6dc", "#e2dacd") + hanger(300, 240) + garment("#d9c9ae", {
+  collar: `<path d="M235 250 q65 90 130 0 q-10 -40 -65 -40 q-55 0 -65 40Z" fill="#cdbb9d"/><path d="M285 300 v60 M315 300 v60" stroke="#f4efe6" stroke-width="5" stroke-linecap="round"/>`,
+  extra: `<path d="M225 470 h150 v70 h-150Z" fill="rgba(0,0,0,.06)"/><rect x="175" y="570" width="250" height="20" fill="rgba(0,0,0,.06)"/>`,
+}));
+svg("shirt", 600, 800, studio("#e3e8ef", "#d6dde7") + hanger(300, 240) + garment("url(#stripe)", {
+  collar: `<path d="M255 238 L300 280 L345 238 L330 225 L300 255 L270 225Z" fill="#f4f1ea" stroke="#c9ccd2" stroke-width="2"/><path d="M300 280 V585" stroke="#c9ccd2" stroke-width="3"/>${[320,380,440,500,560].map(y=>`<circle cx="300" cy="${y}" r="5" fill="#fff" stroke="#999"/>`).join("")}`,
+}));
+svg("jeans", 600, 800, studio("#efe9e1", "#e4dccf") + `<g filter="url(#sh)"><path d="M200 170 h200 l25 560 h-105 l-20 -380 l-20 380 h-105 Z" fill="#4a6a96"/><path d="M200 170 h200 v40 h-200Z" fill="#3f5c85"/><path d="M300 210 v120" stroke="#d6a84a" stroke-width="3" stroke-dasharray="8 6"/><path d="M215 230 q35 30 70 0 M315 230 q35 30 70 0" stroke="#d6a84a" stroke-width="3" fill="none" stroke-dasharray="8 6"/><circle cx="300" cy="190" r="7" fill="#d6a84a"/><path d="M180 725 h105 M315 725 h105" stroke="#3f5c85" stroke-width="10"/></g>`);
+svg("coat", 600, 800, studio("#e9e4dd", "#ddd5ca") + hanger(300, 220) + `<g filter="url(#sh)"><path d="M200 240 L300 215 L400 240 L470 290 L510 600 L462 612 L428 350 L440 740 L160 740 L172 350 L138 612 L90 600 L130 290 Z" fill="#8a6a4f"/><path d="M262 232 L300 330 L338 232 L360 240 L325 420 L300 470 L275 420 L240 240Z" fill="#7a5c43"/><path d="M300 330 V740" stroke="#6d5139" stroke-width="4"/>${[480,560].map(y=>`<circle cx="320" cy="${y}" r="9" fill="#3e2c1e"/><circle cx="280" cy="${y}" r="9" fill="#3e2c1e"/>`).join("")}<path d="M195 560 h50 M355 560 h50" stroke="#6d5139" stroke-width="5"/></g>`);
+svg("cardigan", 600, 800, studio("#f1e7e2", "#e7dad3") + hanger(300, 240) + garment("url(#knit)", {
+  collar: `<path d="M262 245 L300 360 L338 245" stroke="#8d3a2b" stroke-width="10" fill="none"/><path d="M300 360 V590" stroke="#8d3a2b" stroke-width="8"/>${[400,450,500,550].map(y=>`<circle cx="312" cy="${y}" r="6" fill="#f2e2c4"/>`).join("")}`,
+  extra: `<rect x="175" y="560" width="250" height="30" fill="#8d3a2b" opacity=".6"/>`,
+}));
+svg("tote", 600, 800, studio("#e6ebe4", "#d9e0d6") + `<g filter="url(#sh)"><path d="M235 330 q0 -150 65 -150 q65 0 65 150" stroke="#c9b48e" stroke-width="18" fill="none"/><path d="M160 320 h280 l25 380 h-330Z" fill="#efe4cc"/><rect x="230" y="450" width="140" height="90" fill="none" stroke="#2f4a3a" stroke-width="4"/><text x="300" y="505" text-anchor="middle" font-family="Georgia,serif" font-size="30" fill="#2f4a3a" letter-spacing="4">BAIRI</text></g>`);
+// banner, 1000x1250: a rail of clothes
+svg("fashion-hero", 1000, 1250, `<rect width="1000" height="1250" fill="#d8cfc2"/><rect y="1050" width="1000" height="200" fill="#cbbfae"/><rect x="60" y="250" width="880" height="14" rx="7" fill="#6b6259"/><rect x="80" y="250" width="12" height="820" fill="#6b6259"/><rect x="908" y="250" width="12" height="820" fill="#6b6259"/>` +
+  [["#e8dfd0",150],["#4a6a96",290],["#8a6a4f",430],["#f4f1ea",570],["#b7553f",710],["#2b2b2b",850]].map(([c,x],i)=>`<g filter="url(#sh)"><path d="M${x} 262 v18" stroke="#6b6259" stroke-width="4"/><path d="M${x-55} 300 L${x} 282 L${x+55} 300 L${x+75} ${520+i%2*80} L${x+45} ${530+i%2*80} L${x+40} 380 L${x+42} ${820-i%3*60} L${x-42} ${820-i%3*60} L${x-40} 380 L${x-45} ${530+i%2*80} L${x-75} ${520+i%2*80}Z" fill="${c}"/></g>`).join("") +
+  `<g filter="url(#sh)"><rect x="640" y="900" width="220" height="190" rx="6" fill="#efe4cc"/><path d="M700 900 q0 -70 50 -70 q50 0 50 70" stroke="#c9b48e" stroke-width="10" fill="none"/></g><g filter="url(#sh)"><ellipse cx="260" cy="1090" rx="90" ry="22" fill="#2b2b2b"/><path d="M180 1090 q10 -60 60 -60 h40 q40 0 60 60Z" fill="#3a3a3a"/></g>`);
+
+// ---------- food, 800x800 top-down on a table ----------
+const table = (w, h, bg = "url(#wood)") => `<rect width="${w}" height="${h}" fill="${bg}"/>`;
+const plate = (cx, cy, r, rim = "#fbfaf6") => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${rim}" filter="url(#sh)"/><circle cx="${cx}" cy="${cy}" r="${r*0.78}" fill="#f1eee6"/>`;
+const bowl = (cx, cy, r, glaze = "#2f4f6b") => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${glaze}" filter="url(#sh)"/><circle cx="${cx}" cy="${cy}" r="${r*0.86}" fill="#f6f2ea"/>`;
+const rnd = (s => () => (s = (s * 9301 + 49297) % 233280) / 233280)(7);
+const pork = (cx, cy, n, spread) => Array.from({length:n},(_,i)=>{const a=rnd()*6.28,d=rnd()*spread,x=cx+Math.cos(a)*d,y=cy+Math.sin(a)*d;return `<rect x="${x-22}" y="${y-22}" width="44" height="44" rx="8" fill="#8e3a1c" transform="rotate(${rnd()*60} ${x} ${y})" filter="url(#sh2)"/><rect x="${x-22}" y="${y-22}" width="44" height="14" rx="6" fill="#e8c9a6" transform="rotate(${rnd()*60} ${x} ${y})" opacity=".8"/>`}).join("");
+const greens = (cx, cy, n, spread, c = "#4f8a3a") => Array.from({length:n},()=>{const a=rnd()*6.28,d=rnd()*spread;return `<ellipse cx="${cx+Math.cos(a)*d}" cy="${cy+Math.sin(a)*d}" rx="9" ry="4" fill="${c}" transform="rotate(${rnd()*180} ${cx+Math.cos(a)*d} ${cy+Math.sin(a)*d})"/>`}).join("");
+const fish = (cx, cy, s = 1) => `<g transform="translate(${cx} ${cy}) scale(${s})"><ellipse rx="300" ry="170" fill="#fbfaf6" filter="url(#sh)"/><ellipse rx="260" ry="135" fill="#a8401f" opacity=".85"/><path d="M-170 0 q80 -95 250 -20 l70 -50 v140 l-70 -50 q-170 75 -250 -20Z" fill="#e2b98e"/><path d="M-60 -40 q20 40 0 80 M0 -45 q20 45 0 90 M60 -40 q20 40 0 80" stroke="#c48a5a" stroke-width="6" fill="none"/><circle cx="-130" cy="-10" r="9" fill="#3a2a20"/>${greens(0,0,26,160,"#5c9a3c")}${Array.from({length:14},()=>`<circle cx="${(rnd()-.5)*420}" cy="${(rnd()-.5)*220}" r="6" fill="#d23a20"/>`).join("")}</g>`;
+const noodles = (cx, cy, r) => bowl(cx, cy, r, "#8a2f1f") + `<circle cx="${cx}" cy="${cy}" r="${r*0.8}" fill="#d9a35b"/>` + Array.from({length:9},(_,i)=>`<path d="M${cx-r*0.6} ${cy-r*0.4+i*r*0.1} q${r*0.3} -20 ${r*0.6} 0 t${r*0.6} 0" stroke="#f3dca0" stroke-width="7" fill="none"/>`).join("") + `<ellipse cx="${cx+r*0.3}" cy="${cy-r*0.3}" rx="${r*0.22}" ry="${r*0.17}" fill="#fff"/><circle cx="${cx+r*0.3}" cy="${cy-r*0.3}" r="${r*0.11}" fill="#f2a516"/>` + pork(cx-r*0.35, cy+r*0.3, 3, r*0.12) + greens(cx, cy, 18, r*0.6);
+const chopsticks = (x, y, rot) => `<g transform="rotate(${rot} ${x} ${y})" filter="url(#sh2)"><rect x="${x}" y="${y}" width="360" height="12" rx="5" fill="#3b2a1f"/><rect x="${x}" y="${y+22}" width="360" height="12" rx="5" fill="#3b2a1f"/></g>`;
+const rice = (cx, cy, r) => bowl(cx, cy, r, "#e9e4da") + `<circle cx="${cx}" cy="${cy}" r="${r*0.78}" fill="#fffdf6"/>` + Array.from({length:30},()=>`<ellipse cx="${cx+(rnd()-.5)*r*1.2}" cy="${cy+(rnd()-.5)*r*1.2}" rx="5" ry="2.5" fill="#eee6d4"/>`).join("");
+const tea = (cx, cy) => `<circle cx="${cx}" cy="${cy}" r="42" fill="#d9d2c4" filter="url(#sh2)"/><circle cx="${cx}" cy="${cy}" r="33" fill="#b98a3e"/>`;
+
+svg("dish-pork", 800, 800, table(800,800) + plate(400, 400, 290) + pork(400, 400, 13, 150) + greens(400, 400, 20, 170) + chopsticks(470, 690, -18));
+svg("dish-fish", 800, 800, table(800,800,"url(#cloth)") + fish(400, 400, 1.15));
+svg("dish-noodle", 800, 800, table(800,800) + noodles(400, 400, 300) + chopsticks(80, 720, -30));
+svg("set-two", 800, 800, table(800,800,"url(#cloth)") + plate(260, 270, 190) + pork(260, 270, 7, 90) + greens(260,270,10,100) + plate(560, 560, 200) + `<g transform="translate(560 560) scale(.55)">${fish(0,0,1)}</g>` + rice(600, 210, 105) + rice(200, 600, 105) + tea(420, 120) + tea(110, 400));
+svg("room", 800, 800, `<rect width="800" height="800" fill="#4a3426"/><rect x="0" y="520" width="800" height="280" fill="#6d4c35"/>` + [140,400,660].map(x=>`<path d="M${x} 0 v120" stroke="#2a1d15" stroke-width="4"/><path d="M${x-60} 180 q60 -90 120 0Z" fill="#e8b45b"/><ellipse cx="${x}" cy="182" rx="60" ry="10" fill="#ffd98a"/>`).join("") + `<g filter="url(#sh)"><ellipse cx="400" cy="600" rx="300" ry="90" fill="#8b5a36"/><ellipse cx="400" cy="590" rx="300" ry="90" fill="#a8703f"/></g>` + [[260,575],[400,555],[540,575],[330,620],[470,620]].map(([x,y])=>`<ellipse cx="${x}" cy="${y}" rx="46" ry="16" fill="#f6f2ea"/>`).join(""));
+svg("sauce", 800, 800, `<rect width="800" height="800" fill="#efe4d3"/><rect y="560" width="800" height="240" fill="url(#wood)"/>` + [[270,"#a8261a"],[530,"#c4421f"]].map(([x,c])=>`<g filter="url(#sh)"><rect x="${x-110}" y="300" width="220" height="300" rx="26" fill="${c}"/><rect x="${x-120}" y="260" width="240" height="60" rx="10" fill="#2b211a"/><rect x="${x-90}" y="390" width="180" height="120" rx="8" fill="#f6efe2"/><text x="${x}" y="462" text-anchor="middle" font-family="Songti SC,serif" font-size="44" fill="#2b211a">辣酱</text><ellipse cx="${x-50}" cy="350" rx="14" ry="30" fill="#fff" opacity=".25"/></g>`).join("") + greens(650, 640, 6, 40, "#3e7a2c"));
+// banner, 1600x1000
+svg("dining-hero", 1600, 1000, table(1600,1000) + plate(470, 430, 260) + pork(470, 430, 11, 130) + greens(470, 430, 16, 150) + noodles(1150, 520, 300) + rice(250, 820, 110) + rice(820, 860, 110) + tea(820, 140) + tea(1500, 120) + chopsticks(560, 900, -8));
+</script>
+</body>

@@ -41,6 +41,18 @@ describe("shop pages", () => {
     expect(ld.hasOfferCatalog.itemListElement[0]).toMatchObject({ price: "168.00", priceCurrency: "CNY", itemOffered: { "@type": "Service", name: "法式美甲" } });
   });
 
+  it("switches templates without touching content", async () => {
+    const t = await setup();
+    const { token } = await t.nailStudio();
+    expect((await get(t, "/s/nail-studio")).text).toContain('<body data-style="minimal">');
+    const change = await t.ok("POST", "/api/merchant/changes", { token, body: { kind: "theme.update", patch: { style: "dining", font: "serif", radius: "soft" } } });
+    expect(change.change.summary).toBe("模板 简约→餐厅；字体 默认→宋体");
+    await t.ok("POST", "/api/merchant/publish", { token });
+    const page = await get(t, "/s/nail-studio");
+    expect(page.text).toContain('<body data-style="dining">');
+    expect(page.text).toContain("法式美甲");
+  });
+
   it("says so when the shop or product doesn't exist", async () => {
     const t = await setup();
     await t.nailStudio();
@@ -74,11 +86,11 @@ describe("shop pages", () => {
     await t.ok("POST", "/api/merchant/publish", { token });
 
     const shop = await get(t, "/s/nail-studio");
-    expect(shop.text).toContain('<img src="https://img.example/a.jpg" alt="法式美甲" class="thumb" width="72" height="72" loading="lazy" decoding="async"');
+    expect(shop.text).toContain('<img src="https://img.example/a.jpg" alt="法式美甲" class="row-img" width="96" height="96" loading="lazy" decoding="async"');
     const detail = await get(t, `/s/nail-studio/p/${product.id}`);
-    expect(detail.text).toContain('class="photos"');
-    expect(detail.text).toContain('src="https://img.example/a.jpg" alt="法式美甲" width="480" height="360" loading="eager"');
-    expect(detail.text).toContain('src="/files/b.jpg" alt="法式美甲" width="480" height="360" loading="lazy"');
+    expect(detail.text).toContain('class="media"');
+    expect(detail.text).toContain('src="https://img.example/a.jpg" alt="法式美甲" width="600" height="600" loading="eager"');
+    expect(detail.text).toContain('src="/files/b.jpg" alt="法式美甲" width="600" height="600" loading="lazy"');
   });
 
   it("renders custom HTML without anything executable", async () => {

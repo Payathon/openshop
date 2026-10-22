@@ -53,8 +53,16 @@ describe("pages", () => {
   });
 
   it("validates the theme", () => {
-    expect(parsePage({ sections: [{ id: "h", type: "header" }] }).theme).toEqual({ primary: "#d6336c", font: "system", radius: "soft" });
+    expect(parsePage({ sections: [{ id: "h", type: "header" }] }).theme).toEqual({ style: "minimal", primary: "#d6336c", font: "system", radius: "soft" });
     expect(() => parsePage({ sections: [{ id: "h", type: "header" }], theme: { primary: "pink" } })).toThrow("#RRGGBB");
+    expect(() => parsePage({ sections: [{ id: "h", type: "header" }], theme: { style: "brutalist" } })).toThrow();
+  });
+
+  it("gives each industry a template, and lets onboarding pick another", () => {
+    expect(templatePage(TEMPLATES.restaurant!, ["booking"]).theme).toMatchObject({ style: "dining", font: "serif" });
+    expect(templatePage(TEMPLATES.fashion!, ["shopping"]).sections.find((s) => s.type === "products")?.props).toMatchObject({ layout: "grid" });
+    // A different template brings its own font and corners but keeps the industry's colour.
+    expect(templatePage(TEMPLATES.nail!, ["booking"], "minimal").theme).toEqual({ style: "minimal", primary: "#d6336c", font: "system", radius: "square" });
   });
 
   it("defaults to the M2 layout", () => {

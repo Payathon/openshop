@@ -5,7 +5,8 @@ export const CHECKOUT_SCRIPT = `(() => {
   const d = JSON.parse(document.getElementById("checkout-data").textContent);
   const form = document.getElementById("checkout");
   const err = document.getElementById("error");
-  const pay = form.querySelector("button[type=submit]");
+  const pay = document.querySelector("button[form=checkout]");
+  const sum = document.getElementById("total");
   const booking = d.fulfillment === "booking";
   const yuan = (fen) => "¥" + (fen % 100 === 0 ? fen / 100 : (fen / 100).toFixed(2));
   const hhmm = (iso) => new Date(new Date(iso).getTime() + 8 * 3600e3).toISOString().slice(11, 16);
@@ -14,7 +15,7 @@ export const CHECKOUT_SCRIPT = `(() => {
     return d.variants.find((v) => v.id === el.value);
   };
   const qty = () => (booking ? 1 : Math.max(1, Math.floor(Number(form.quantity.value)) || 1));
-  const total = () => { pay.textContent = "去支付 " + yuan(variant().priceFen * qty()); };
+  const total = () => { sum.textContent = yuan(variant().priceFen * qty()); };
 
   async function availability(date) {
     const q = new URLSearchParams({ variantId: variant().id });
@@ -41,10 +42,10 @@ export const CHECKOUT_SCRIPT = `(() => {
       for (const s of slots) {
         const b = document.createElement("button");
         b.type = "button";
-        b.className = "chip";
+        b.className = "pill";
         b.textContent = hhmm(s.start);
         b.onclick = () => {
-          box.querySelectorAll(".chip").forEach((x) => x.classList.remove("on"));
+          box.querySelectorAll(".pill").forEach((x) => x.classList.remove("on"));
           b.classList.add("on");
           form.slotStart.value = s.start;
           err.textContent = "";
@@ -82,6 +83,13 @@ export const CHECKOUT_SCRIPT = `(() => {
     booking ? loadSlots() : loadStock();
   });
   form.addEventListener("input", (e) => { if (e.target.name === "quantity") total(); });
+  form.querySelectorAll("[data-step]").forEach((b) => {
+    b.onclick = () => {
+      const q = form.quantity;
+      q.value = String(Math.min(Number(q.max) || 99, Math.max(1, qty() + Number(b.dataset.step))));
+      total();
+    };
+  });
 
   // Runs only after the browser's own checks (required, pattern) pass.
   form.addEventListener("submit", async (e) => {
