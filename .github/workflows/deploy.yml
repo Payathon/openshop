@@ -1,0 +1,118 @@
+# After CI passes on main: push the image to GHCR, then roll it out on the server over SSH.
+# The rollout is skipped (green) until the DEPLOY_HOST, DEPLOY_USER and DEPLOY_SSH_KEY secrets exist.
+# The server keeps its own .env in /opt/openshop; see docs/deploy.md.
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/payathon/openshop
+
+jobs:
+  image:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - id: tag
+        run: echo "tag=sha-$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+    steps:
+      - name: Check deploy secrets
+        id: check
+        run: |
+          if [ -n "$DEPLOY_HOST" ] && [ -n "$DEPLOY_USER" ] && [ -n "$DEPLOY_SSH_KEY" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::DEPLOY_HOST / DEPLOY_USER / DEPLOY_SSH_KEY not set; image pushed, rollout skipped."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v5
+        if: steps.check.outputs.ready == 'true'
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - name: Set up SSH
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+      - name: Copy compose files
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          ssh -i ~/.ssh/deploy "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p /opt/openshop/backups"
+          scp -i ~/.ssh/deploy deploy/docker-compose.yml deploy/docker-compose.edge.yml deploy/docker-compose.caddy.yml \
+            deploy/Caddyfile deploy/site.caddy deploy/backup.sh deploy/up.sh "$DEPLOY_USER@$DEPLOY_HOST:/opt/openshop/"
+      - name: Pull and restart
+        if: steps.check.outputs.ready == 'true'
+        env:
+          TAG: ${{ needs.image.outputs.tag }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The job's token logs the server in just long enough to pull, so a private package works too.
+          printf '%s' "$GHCR_TOKEN" | ssh -i ~/.ssh/deploy "$DEPLOY_USER@$DEPLOY_HOST" "
+            set -e
+            cd /opt/openshop
+            chmod +x up.sh
+            docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+            trap 'docker logout ghcr.io >/dev/null' EXIT
+            OPENSHOP_IMAGE=$IMAGE:$TAG ./up.sh
+            # Keep :latest on the server pointing at what runs, for a manual ./up.sh without OPENSHOP_IMAGE.
+            docker tag $IMAGE:$TAG $IMAGE:latest
+            docker image prune -f
+          "
+      - name: Health check
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          for _ in $(seq 1 30); do
+            if ssh -i ~/.ssh/deploy "$DEPLOY_USER@$DEPLOY_HOST" "cd /opt/openshop && docker compose exec -T app node -e \"fetch('http://127.0.0.1:8788/healthz').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))\""; then
+              echo "healthy"; exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::openshop did not become healthy"; exit 1

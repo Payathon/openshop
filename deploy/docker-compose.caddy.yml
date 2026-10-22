@@ -1,0 +1,23 @@
+# OpenShop alone on the machine: its own Caddy takes 80/443 and gets the certificate for
+# $OPENSHOP_DOMAIN (Caddyfile).
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      OPENSHOP_DOMAIN: ${OPENSHOP_DOMAIN:?set OPENSHOP_DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+
+volumes:
+  caddy_data:
+  caddy_config:

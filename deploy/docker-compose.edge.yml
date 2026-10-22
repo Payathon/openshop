@@ -1,0 +1,12 @@
+# Shared server: the app joins the external `edge` network as `openshop`, and the edge Caddy
+# (/opt/edge, from the hive repo's deploy/edge) proxies $OPENSHOP_DOMAIN to it. No ports here.
+services:
+  app:
+    networks:
+      default:
+      edge:
+        aliases: [openshop]
+
+networks:
+  edge:
+    external: true

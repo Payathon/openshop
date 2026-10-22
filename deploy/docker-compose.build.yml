@@ -1,0 +1,9 @@
+# Build the image from this checkout instead of pulling it from GHCR. Add it to COMPOSE_FILE in
+# .env (e.g. docker-compose.yml:docker-compose.caddy.yml:docker-compose.build.yml); up.sh then
+# builds instead of pulling. The checkout must be the parent directory.
+services:
+  app:
+    image: openshop:local
+    build:
+      context: ..
+      dockerfile: Dockerfile

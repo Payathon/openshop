@@ -1,0 +1,6 @@
+# OpenShop's site on the shared edge Caddy. up.sh puts OPENSHOP_DOMAIN from .env in place of the site address below
+# and writes the result to /opt/edge/sites/openshop.caddy. Same rules as Caddyfile.
+__DOMAIN__ {
+	encode zstd gzip
+	reverse_proxy openshop:8788
+}

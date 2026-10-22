@@ -1,42 +1,31 @@
-# OpenShop on one machine: Caddy (HTTPS) → app → Postgres, plus a daily backup.
-# Run from this directory with a filled-in .env (copy .env.example):
-#   docker compose up -d --build
-# See docs/deploy.md.
+# OpenShop on one machine: app → Postgres, plus a daily backup. HTTPS comes from one of two
+# overrides, picked with COMPOSE_FILE in .env (see docs/deploy.md):
+#   docker-compose.edge.yml    shared server: join the `edge` network; the edge Caddy (hive repo,
+#                              deploy/edge, in /opt/edge) proxies $OPENSHOP_DOMAIN to the app
+#   docker-compose.caddy.yml   OpenShop alone on the machine: its own Caddy on 80/443
+# Add docker-compose.build.yml to build the image from a checkout instead of pulling it.
+# In the directory with .env:  ./up.sh   (CD runs the same script)
 
 name: openshop
 
-services:
-  caddy:
-    image: caddy:2.10-alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    environment:
-      OPENSHOP_DOMAIN: ${OPENSHOP_DOMAIN:?set OPENSHOP_DOMAIN in .env}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      app:
-        condition: service_healthy
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "20m", max-file: "5" }
 
+services:
   app:
-    build:
-      context: ..
-      dockerfile: Dockerfile
-    image: openshop-app
+    image: ${OPENSHOP_IMAGE:-ghcr.io/payathon/openshop:latest}
     restart: unless-stopped
     init: true
     # main.ts finishes the payment sweep and open requests within 8s of SIGTERM.
     stop_grace_period: 15s
     environment:
-      PUBLIC_URL: ${PUBLIC_URL:?set PUBLIC_URL in .env}
+      PUBLIC_URL: ${PUBLIC_URL:-https://${OPENSHOP_DOMAIN:?set OPENSHOP_DOMAIN in .env}}
       DATABASE_URL: postgres://openshop:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/openshop
       PAYMENT_SYNC_MS: ${PAYMENT_SYNC_MS:-10000}
+      PREVIEW_SECRET: ${PREVIEW_SECRET:-}
       SEED: ${SEED:-1}
+      SEED_ACCOUNTS: ${SEED_ACCOUNTS:-}
       ALIPAY_APP_ID: ${ALIPAY_APP_ID:-}
       ALIPAY_PRIVATE_KEY: ${ALIPAY_PRIVATE_KEY:-}
       ALIPAY_PUBLIC_KEY: ${ALIPAY_PUBLIC_KEY:-}
@@ -46,9 +35,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    logging: &logging
-      driver: json-file
-      options: { max-size: "20m", max-file: "5" }
+    logging: *logging
 
   postgres:
     image: postgres:17-alpine
@@ -91,5 +78,3 @@ services:
 volumes:
   pgdata:
   uploads:
-  caddy_data:
-  caddy_config:
