@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEMO, seedAccounts, TRY } from "./seed-accounts.ts";
+import { DEMO, DINING, FASHION, seedAccounts, TRY } from "./seed-accounts.ts";
 import { BASE, setup } from "./test-helpers.ts";
 
 // A browser: keeps the session cookie between requests.
@@ -72,7 +72,16 @@ describe("merchant accounts", () => {
     expect((await t.call("GET", "/api/merchant/shop", { token })).status).toBe(200);
   });
 
-  it("seeds a finished shop and an account still to onboard, once", async () => {
+  it("serves the homepage without demo shops", async () => {
+    const t = await setup();
+    const res = await t.app.request(`${BASE}/`);
+    expect(res.status).toBe(200);
+    const home = await res.text();
+    expect(home).toContain('href="/admin/register"');
+    expect(home).not.toContain('id="shops"');
+  });
+
+  it("seeds finished shops and an account still to onboard, once", async () => {
     const t = await setup();
     expect(await seedAccounts(t.app, BASE)).toBe(true);
     expect(await seedAccounts(t.app, BASE)).toBe(false);
@@ -88,8 +97,16 @@ describe("merchant accounts", () => {
     const orders = (await demo("GET", "/api/merchant/orders")).body as { status: string; source: string }[];
     expect(orders.filter((o) => o.status === "confirmed")).toHaveLength(2);
     expect(orders.some((o) => o.source === "agent")).toBe(true);
-    // The public shop is up.
+    // The public shops are up, each on its own template.
     expect((await t.call("GET", `/api/s/${DEMO.slug}`)).status).toBe(200);
+    for (const [slug, style] of [[FASHION.slug, "fashion"], [DINING.slug, "dining"]]) {
+      expect(await (await t.app.request(`${BASE}/s/${slug}`)).text()).toContain(`<body data-style="${style}">`);
+    }
+
+    // The homepage links the demo shops once they exist.
+    const home = await (await t.app.request(`${BASE}/`)).text();
+    expect(home).toContain("免费开店");
+    expect(home).toContain(`${BASE}/s/${DEMO.slug}`);
 
     const fresh = browser(t.app);
     await fresh("POST", "/api/auth/login", { email: TRY.email, password: TRY.password });

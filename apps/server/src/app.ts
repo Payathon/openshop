@@ -6,6 +6,7 @@ import { createMcpServer } from "@openshop/client/mcp";
 import { MODULES, productInputSchema, STYLES, TEMPLATES, type OrderStatus } from "@openshop/core";
 import { bodyLimit } from "hono/body-limit";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
+import { html } from "hono/html";
 import { Accounts, SESSION_TTL_MS } from "./accounts.ts";
 import { opInputSchema, type OpInput } from "./content.ts";
 import { FakePaymentProvider } from "./payments/fake.ts";
@@ -14,6 +15,7 @@ import { loginSchema, newOrderSchema, newShopSchema, onboardSchema, registerSche
 import { OpenShop, ShopError } from "./shop.ts";
 import { LocalDiskStorage, MAX_IMAGE_BYTES, newImageKey, sniffImage, type Storage } from "./storage.ts";
 import { Studio } from "./studio.ts";
+import { DEMO_SHOPS, HomePage, type DemoShop } from "./web/home.tsx";
 import { shopSite } from "./web/site.tsx";
 
 type Env = { Variables: { shopId: string } };
@@ -95,6 +97,18 @@ export function createApp(
   const orderToken = (c: Context) => c.req.header("x-order-token") ?? "";
   app.get("/api/orders/:id", async (c) => c.json(await shop.getOrder(c.req.param("id"), orderToken(c))));
   app.post("/api/orders/:id/cancel", async (c) => c.json(await shop.cancelOrder(c.req.param("id"), orderToken(c))));
+
+  // ---- OpenShop's own homepage ----------------------------------------------
+
+  app.get("/", async (c) => {
+    // Demo shops exist outside production only (seed-accounts.ts); show the ones that do.
+    const shops: DemoShop[] = [];
+    for (const d of DEMO_SHOPS) {
+      const found = await shop.getShop(d.slug).catch(() => null);
+      if (found) shops.push({ ...d, name: found.name, url: shop.shopUrl(d.slug) });
+    }
+    return c.html(html`<!doctype html>${HomePage({ shops })}`);
+  });
 
   // ---- shop websites: server-rendered pages for customers' browsers -------
 

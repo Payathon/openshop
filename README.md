@@ -31,7 +31,7 @@ pnpm test            # 全部测试
 pnpm typecheck
 ```
 
-打开 http://localhost:8788 会进入商家后台。首次启动会自动准备四个账号，密码都是 `openshop123`：
+打开 http://localhost:8788 是 OpenShop 的首页，商家后台在 http://localhost:8788/admin 。首次启动会自动准备四个账号，密码都是 `openshop123`：
 
 | 账号 | 状态 | 用来做什么 |
 |---|---|---|

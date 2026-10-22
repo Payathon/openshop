@@ -40,7 +40,6 @@ const app = createApp(shop, payments, { storage, previewSecret });
 // serves it with hot reload instead and proxies everything else here.
 const webDist = process.env.WEB_DIST ?? "../web/dist";
 const site = new Hono().route("/", app);
-site.get("/", (c) => c.redirect("/admin/"));
 if (existsSync(webDist)) {
   const rewrite = (path: string) => path.replace(/^\/admin/, "");
   site.use("/admin/*", serveStatic({ root: webDist, rewriteRequestPath: rewrite }));
