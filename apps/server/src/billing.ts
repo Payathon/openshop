@@ -195,13 +195,16 @@ export class Billing {
   }
 
   // Idempotent: only a pending payment becomes paid. The shop row is locked so two payments
-  // settling at once still line their months up end to end instead of overlapping.
+  // settling at once still line their months up end to end instead of overlapping. Shop row
+  // first, then the payment, the same order as refund, so the two can't deadlock.
   private async markPaid(id: string) {
     const now = this.clock();
     await this.db.transaction(async (tx) => {
+      const [found] = await tx.select({ shopId: billingPayments.shopId }).from(billingPayments).where(eq(billingPayments.id, id));
+      if (!found) return;
+      await tx.select({ id: shops.id }).from(shops).where(eq(shops.id, found.shopId)).for("update");
       const [locked] = await tx.select().from(billingPayments).where(eq(billingPayments.id, id)).for("update");
       if (!locked || locked.status !== "pending") return;
-      await tx.select({ id: shops.id }).from(shops).where(eq(shops.id, locked.shopId)).for("update");
       const until = await this.proUntil(tx, locked.shopId);
       // Renewing while active extends from the current end; otherwise the month starts now.
       const periodStart = until && until > now ? until : now;
