@@ -50,7 +50,8 @@ app 负责 API、`/mcp` 和店铺网页，Postgres 存数据，另有一个服�
 | DNS | `@` 的 A 记录指向服务器 IP。以后做店铺子域名时，再加一条 `*` 的 A 记录 | 域名服务商的解析设置 |
 | 数据库密码 | `openssl rand -hex 24` 生成 | `.env` 的 `POSTGRES_PASSWORD` |
 | 预览签名密钥 | `openssl rand -hex 32` 生成；不填的话每次重启预览链接就失效 | `.env` 的 `PREVIEW_SECRET` |
-| 支付宝收款（可选） | 开放平台应用的 APPID、应用私钥（PKCS#1）、支付宝公钥，都填不带 PEM 头尾的原始字符串。付款通知地址（`https://<域名>/payments/alipay/notify`）随每笔下单请求发给支付宝，不用在开放平台配置。不填就用模拟收银台 | `.env` 的 `ALIPAY_*` |
+| 支付宝收款（可选） | 开放平台应用的 APPID、应用私钥（PKCS#1）、支付宝公钥，都填不带 PEM 头尾的原始字符串。付款通知地址（`https://<域名>/payments/alipay/notify`）随每笔下单请求发给支付宝，不用在开放平台配置。不填就用模拟收银台。这是**顾客付给店铺**的货款 | `.env` 的 `ALIPAY_*` |
+| 平台收款（可选） | 另一个开放平台应用，收商家买专业版的钱，进 OpenShop 自己的账户。和上面一样填 APPID、应用私钥、支付宝公钥，生产环境把网关设为 `https://openapi.alipay.com/gateway.do`。付款通知地址是 `https://<域名>/payments/platform-alipay/notify`。**不能和店铺收款用同一个账户**，否则顾客的钱进了平台账户，就是二清。不填就用模拟收银台 | `.env` 的 `PLATFORM_ALIPAY_*` |
 
 服务端不调 Claude API，不需要 Anthropic 的 key。
 
@@ -104,6 +105,17 @@ docker compose -f /opt/edge/docker-compose.yml logs -f caddy   # 访问和证书
 ```
 
 每个服务的日志最多保留 5 个 20 MB 的文件，自动轮转。
+
+## 专业版退款
+
+没有平台管理后台，退款在服务器上跑脚本。它用和 app 一样的环境变量（`DATABASE_URL`、`PLATFORM_ALIPAY_*`），从平台的支付宝账户全额退款一次，这笔付款的月份不再计入：
+
+```bash
+cd /opt/openshop
+docker compose exec app node --import tsx src/billing-refund.ts bill_xxxxxxxxxxxxxxxx
+```
+
+付款号（`bill_…`）这样查：`docker compose exec postgres psql -U openshop -c "select b.id, s.slug, b.status, b.paid_at from billing_payments b join shops s on s.id = b.shop_id order by b.created_at desc limit 20"`。只能退这家店最后一笔付款，要退更早的先退后面的。重复执行不会退两次。本地用 `pnpm --filter @openshop/server billing:refund bill_…`。
 
 ## 备份
 

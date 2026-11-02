@@ -16,6 +16,7 @@ const NAV: { to: string; label: string; icon: ReactNode; end?: boolean }[] = [
   { to: "/schedule", label: "营业时间与库存", icon: icon("M10 3a7 7 0 1 0 0 14a7 7 0 1 0 0-14z M10 6v4l3 2") },
   { to: "/customers", label: "顾客", icon: icon("M7 9a3 3 0 1 0 0-6a3 3 0 1 0 0 6z M2 17c0-3 2-5 5-5s5 2 5 5 M13 4a3 3 0 0 1 0 5 M15 12c2 .5 3 2 3 5") },
   { to: "/design", label: "店铺装修", icon: icon("M3 4h14v12H3z M3 8h14 M8 8v8") },
+  { to: "/billing", label: "套餐与续费", icon: icon("M3 5h14v10H3z M3 8h14 M6 12h3") },
   { to: "/settings", label: "设置", icon: icon("M10 7a3 3 0 1 0 0 6a3 3 0 1 0 0-6z M10 2v2 M10 16v2 M2 10h2 M16 10h2 M4.3 4.3l1.4 1.4 M14.3 14.3l1.4 1.4 M4.3 15.7l1.4-1.4 M14.3 5.7l1.4-1.4") },
 ];
 

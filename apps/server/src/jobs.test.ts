@@ -81,7 +81,7 @@ describe("payment sweep", () => {
   it("keeps sweeping in the background until stopped", async () => {
     const t = await setup();
     const { order } = await booking(t);
-    const jobs = startPaymentSync(t.shop, 10);
+    const jobs = startPaymentSync([t.shop], 10);
     try {
       await t.pay(order);
       await expect.poll(() => statusOf(t, order.id), { timeout: 2_000 }).toBe("confirmed");

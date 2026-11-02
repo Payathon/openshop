@@ -3,11 +3,11 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { createApp } from "./app.ts";
-import { connectPglite, connectPostgres } from "./db/client.ts";
+import { Billing } from "./billing.ts";
+import { connectFromEnv } from "./db/client.ts";
 import { startPaymentSync } from "./jobs.ts";
-import { AlipayPagePayProvider } from "./payments/alipay.ts";
 import { FakePaymentProvider } from "./payments/fake.ts";
-import type { PaymentProvider } from "./payments/provider.ts";
+import { alipayFromEnv } from "./payments/env.ts";
 import { seedDemo } from "./seed.ts";
 import { DEMO, DINING, FASHION, seedAccounts, TRY } from "./seed-accounts.ts";
 import { OpenShop } from "./shop.ts";
@@ -16,32 +16,13 @@ import { LocalDiskStorage } from "./storage.ts";
 const port = Number(process.env.PORT ?? 8788);
 const baseUrl = process.env.PUBLIC_URL ?? `http://localhost:${port}`;
 
-// DATABASE_URL selects Postgres; without it, an in-process PGlite database under .data/.
-const db = process.env.DATABASE_URL
-  ? await connectPostgres(process.env.DATABASE_URL)
-  : await connectPglite(process.env.PGLITE_DIR ?? ".data/pglite");
+const db = await connectFromEnv();
 
-// ALIPAY_APP_ID turns on real Alipay (电脑网站支付) for every shop; without it payments go
-// through the fake cashier.
-function paymentProvider(): PaymentProvider {
-  if (!process.env.ALIPAY_APP_ID) return new FakePaymentProvider(baseUrl);
-  const need = (name: string) => {
-    const v = process.env[name]?.trim();
-    if (!v) throw new Error(`ALIPAY_APP_ID is set but ${name} is missing`);
-    return v;
-  };
-  return new AlipayPagePayProvider({
-    appId: need("ALIPAY_APP_ID"),
-    privateKey: need("ALIPAY_PRIVATE_KEY"),
-    alipayPublicKey: need("ALIPAY_PUBLIC_KEY"),
-    gateway: process.env.ALIPAY_GATEWAY || undefined,
-    // Alipay can only reach a public HTTPS address; locally, results come from query alone.
-    notifyUrl: baseUrl.startsWith("https://") ? `${baseUrl}/payments/alipay/notify` : undefined,
-  });
-}
-const payments = paymentProvider();
-console.log(`payments: ${payments.name}`);
+const payments = alipayFromEnv("ALIPAY", baseUrl);
+const billingPayments = alipayFromEnv("PLATFORM_ALIPAY", baseUrl);
+console.log(`payments: ${payments.name}, billing: ${billingPayments.name}`);
 const shop = new OpenShop({ db, payments, baseUrl });
+const billing = new Billing({ db, payments: billingPayments, baseUrl });
 const storage = new LocalDiskStorage(process.env.UPLOADS_DIR ?? ".data/uploads", `${baseUrl}/files`);
 
 if (process.env.SEED !== "0") {
@@ -53,8 +34,8 @@ if (process.env.SEED !== "0") {
 const previewSecret = process.env.PREVIEW_SECRET;
 if (!previewSecret) console.warn("PREVIEW_SECRET is not set; preview links stop working when the server restarts");
 
-const jobs = startPaymentSync(shop, Number(process.env.PAYMENT_SYNC_MS ?? 10_000));
-const app = createApp(shop, payments, { storage, previewSecret });
+const jobs = startPaymentSync([shop, billing], Number(process.env.PAYMENT_SYNC_MS ?? 10_000));
+const app = createApp(shop, payments, { storage, previewSecret, billing });
 
 // The merchant workbench (apps/web) is served under /admin once built; `pnpm dev` in apps/web
 // serves it with hot reload instead and proxies everything else here.

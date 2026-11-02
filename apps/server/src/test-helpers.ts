@@ -2,6 +2,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createApp } from "./app.ts";
+import { Billing } from "./billing.ts";
 import { connectPglite } from "./db/client.ts";
 import { FakePaymentProvider } from "./payments/fake.ts";
 import type { PaymentProvider } from "./payments/provider.ts";
@@ -26,8 +27,11 @@ export async function setup<P extends PaymentProvider = FakePaymentProvider>(pro
   const payments = provider ?? (new FakePaymentProvider(BASE) as unknown as P);
   const db = await connectPglite();
   const shop = new OpenShop({ db, payments, clock: () => now, baseUrl: BASE });
+  // 专业版 billing always uses its own fake cashier here, apart from the shop's provider.
+  const billingPayments = new FakePaymentProvider(BASE);
+  const billing = new Billing({ db, payments: billingPayments, clock: () => now, baseUrl: BASE });
   const storage = new LocalDiskStorage(await mkdtemp(join(tmpdir(), "openshop-uploads-")), `${BASE}/files`);
-  const app = createApp(shop, payments, { storage });
+  const app = createApp(shop, payments, { storage, billing });
 
   async function call(method: string, path: string, opts: { token?: string; orderToken?: string; body?: unknown } = {}) {
     const res = await app.request(`${BASE}${path}`, {
@@ -112,6 +116,8 @@ export async function setup<P extends PaymentProvider = FakePaymentProvider>(pro
     shop,
     app,
     payments,
+    billing,
+    billingPayments,
     call,
     ok,
     nailStudio,

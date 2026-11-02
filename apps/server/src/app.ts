@@ -8,6 +8,7 @@ import { bodyLimit } from "hono/body-limit";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { html } from "hono/html";
 import { Accounts, SESSION_TTL_MS } from "./accounts.ts";
+import { Billing, BILLING_ID_PREFIX } from "./billing.ts";
 import { opInputSchema, type OpInput } from "./content.ts";
 import { AlipayPagePayProvider } from "./payments/alipay.ts";
 import { FakePaymentProvider } from "./payments/fake.ts";
@@ -33,13 +34,15 @@ async function body<T extends z.ZodType>(c: Context, schema: T): Promise<z.infer
 const orderStatuses = ["pending_payment", "confirmed", "paid", "shipped", "completed", "cancelled", "expired"] as const;
 
 // previewSecret signs merchants' preview links; set it (PREVIEW_SECRET) so links survive restarts.
+// billing is the platform's own 专业版 billing, on its own provider; without it, a fake cashier.
 export function createApp(
   shop: OpenShop,
   payments: PaymentProvider,
-  opts: { storage?: Storage; previewSecret?: string | undefined } = {},
+  opts: { storage?: Storage; previewSecret?: string | undefined; billing?: Billing } = {},
 ) {
   const app = new Hono<Env>();
   const { storage } = opts;
+  const billing = opts.billing ?? new Billing({ db: shop.db, payments: new FakePaymentProvider(shop.baseUrl), clock: () => shop.now(), baseUrl: shop.baseUrl });
   const studio = new Studio(shop, opts);
   const accounts = new Accounts(shop.db, () => shop.now());
 
@@ -59,7 +62,7 @@ export function createApp(
     return c.json({ error: "internal", message: "服务器内部错误" }, 500);
   });
 
-  app.get("/healthz", (c) => c.json({ ok: true, payments: payments.name }));
+  app.get("/healthz", (c) => c.json({ ok: true, payments: payments.name, billing: billing.payments.name }));
 
   // ---- storefront: what the web page and customers' agents use ------------
 
@@ -246,6 +249,10 @@ export function createApp(
 
   app.get("/api/merchant/customers", async (c) => c.json(await shop.listCustomers(c.get("shopId"))));
 
+  // 专业版: paid to OpenShop itself, through the platform's own provider (billing.ts).
+  app.get("/api/merchant/billing", async (c) => c.json(await billing.overview(c.get("shopId"))));
+  app.post("/api/merchant/billing/checkout", async (c) => c.json(await billing.checkout(c.get("shopId")), 201));
+
   // ---- uploads ------------------------------------------------------------
   // The raw image is the request body (curl --data-binary @a.jpg -H 'content-type: image/jpeg'),
   // which an agent or the workbench can send without multipart encoding.
@@ -297,11 +304,29 @@ export function createApp(
     });
   }
 
+  // The platform's own Alipay app, for 专业版 payments. Same rules as above.
+  const billingPayments = billing.payments;
+  if (billingPayments instanceof AlipayPagePayProvider) {
+    app.post("/payments/platform-alipay/notify", async (c) => {
+      const form = await c.req.parseBody();
+      const params = Object.fromEntries(Object.entries(form).filter((e): e is [string, string] => typeof e[1] === "string"));
+      const id = billingPayments.verifyNotification(params);
+      if (!id) return c.text("failure", 400);
+      await billing.syncPayment(id);
+      return c.text("success");
+    });
+  }
+
   // ---- dev: fake cashier --------------------------------------------------
 
-  if (payments instanceof FakePaymentProvider) {
+  // Both the shop provider and the billing provider may be fakes; billing ids pick the latter.
+  const fakeFor = (id: string) => {
+    const p = id.startsWith(`${BILLING_ID_PREFIX}_`) ? billing.payments : payments;
+    return p instanceof FakePaymentProvider ? p : null;
+  };
+  if (payments instanceof FakePaymentProvider || billing.payments instanceof FakePaymentProvider) {
     app.get("/dev/fake-pay/:orderId", (c) => {
-      const p = payments.get(c.req.param("orderId"));
+      const p = fakeFor(c.req.param("orderId"))?.get(c.req.param("orderId"));
       if (!p) return c.html(cashierPage("找不到这笔付款", `<p class="muted">链接可能已经失效。</p>`), 404);
       const amount = (p.amountFen / 100).toFixed(2);
       const body =
@@ -313,9 +338,13 @@ export function createApp(
     });
     app.post("/dev/fake-pay/:orderId", (c) => {
       const orderId = c.req.param("orderId");
-      if (!payments.complete(orderId)) return c.html(cashierPage("付款已关闭", `<p class="muted">订单已经超时或取消，请回到店铺重新下单。</p>`), 409);
-      // Like Alipay's return_url: web orders go back to the shop's order page.
-      const returnUrl = payments.get(orderId)?.returnUrl;
+      const fake = fakeFor(orderId);
+      if (!fake?.complete(orderId)) {
+        const again = orderId.startsWith(`${BILLING_ID_PREFIX}_`) ? "这笔付款已经超时，请回到后台重新开通。" : "订单已经超时或取消，请回到店铺重新下单。";
+        return c.html(cashierPage("付款已关闭", `<p class="muted">${again}</p>`), 409);
+      }
+      // Like Alipay's return_url: web orders go back to the shop's order page, billing to the workbench.
+      const returnUrl = fake.get(orderId)?.returnUrl;
       if (returnUrl) return c.redirect(returnUrl, 303);
       return c.html(cashierPage("付款成功", `<p class="ok">✓</p><p>付款成功。回到和 AI 助手的对话，告诉它“付好了”。</p>`));
     });

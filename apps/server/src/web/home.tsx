@@ -137,7 +137,6 @@ p{margin:0}
 .plan ul{margin:0;padding:0;list-style:none;display:grid;gap:10px;color:var(--muted);font-size:15px}
 .plan li{display:flex;gap:10px}
 .plan li::before{content:"";flex:0 0 6px;height:6px;margin-top:9px;border-radius:50%;background:var(--accent)}
-.plan.soon li::before{background:var(--dim)}
 .stat{border-left:2px solid var(--accent);padding-left:16px;margin-top:40px;max-width:30em;color:var(--muted)}
 .stat strong{display:block;color:#fff;font-weight:400;font-size:20px;margin-bottom:4px}
 
@@ -403,17 +402,21 @@ export function HomePage(p: { shops: DemoShop[] }) {
                 免费开店
               </a>
             </div>
-            <div class="plan soon">
+            <div class="plan">
               <h3>专业版</h3>
               <p class="price">
-                即将推出<small></small>
+                ¥29<small>每月，按月购买</small>
               </p>
               <ul>
                 <li>自定义域名</li>
                 <li>去掉 OpenShop 标识</li>
                 <li>更多次数的 AI 改店</li>
                 <li>更多高级模块</li>
+                <li>网站托管与维护</li>
               </ul>
+              <a class="btn" href="/admin/billing">
+                开通专业版
+              </a>
             </div>
           </div>
           <p class="stat">

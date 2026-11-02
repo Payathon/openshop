@@ -79,6 +79,8 @@ describe("merchant accounts", () => {
     const home = await res.text();
     expect(home).toContain('href="/admin/register"');
     expect(home).not.toContain('id="shops"');
+    expect(home).toContain('href="/admin/billing"');
+    expect(home).not.toContain("即将推出");
   });
 
   it("seeds finished shops and an account still to onboard, once", async () => {

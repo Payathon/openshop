@@ -125,6 +125,37 @@ export const customers = pgTable(
   (t) => [uniqueIndex("customers_shop_phone_idx").on(t.shopId, t.phone)],
 );
 
+// ---- billing: merchants paying OpenShop for 专业版 ---------------------------
+// The platform's own revenue, through the platform's own Alipay app (billing.ts), never the
+// provider that takes customers' payments for shops.
+
+export type BillingPlan = "pro";
+// refunded: paid, then refunded in full (billing-refund.ts); its months no longer count.
+export type BillingStatus = "pending" | "paid" | "closed" | "refunded";
+
+// One payment for some months of a plan. The id (bill_…) is the out_trade_no; the prefix tells
+// billing trades apart from orders. The plan is active while the latest period_end is ahead.
+export const billingPayments = pgTable(
+  "billing_payments",
+  {
+    id: text("id").primaryKey(),
+    shopId: text("shop_id").notNull().references(() => shops.id),
+    plan: text("plan").$type<BillingPlan>().notNull(),
+    months: integer("months").notNull(),
+    amountFen: integer("amount_fen").notNull(),
+    status: text("status").$type<BillingStatus>().notNull(),
+    paymentUrl: text("payment_url").notNull(),
+    paymentExpiresAt: timestamp("payment_expires_at", { withTimezone: true }).notNull(),
+    // Set when paid: the months bought, starting where the previous paid period ends.
+    periodStart: timestamp("period_start", { withTimezone: true }),
+    periodEnd: timestamp("period_end", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    refundedAt: timestamp("refunded_at", { withTimezone: true }),
+  },
+  (t) => [index("billing_payments_shop_idx").on(t.shopId, t.createdAt), index("billing_payments_status_idx").on(t.status)],
+);
+
 // Short leases on background jobs, so only one app instance runs a job at a time.
 // A row rather than a Postgres advisory lock: it works on any pooled connection and in PGlite,
 // and a crashed holder's lease simply expires.

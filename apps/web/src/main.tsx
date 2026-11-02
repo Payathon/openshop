@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import { get, isUnauthorized, post } from "./api.ts";
 import { Login, Register } from "./pages/Auth.tsx";
+import { BillingPage } from "./pages/Billing.tsx";
 import { Customers } from "./pages/Customers.tsx";
 import { Design } from "./pages/Design.tsx";
 import { Home } from "./pages/Home.tsx";
@@ -76,6 +77,7 @@ function App() {
           <Route path="/customers" element={<Customers />} />
           <Route path="/design" element={<Design />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/billing" element={<BillingPage />} />
           <Route path="/login" element={<Navigate to="/" replace />} />
           <Route path="/register" element={<Navigate to="/" replace />} />
           <Route path="/onboarding" element={<Navigate to="/" replace />} />

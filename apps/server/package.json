@@ -15,7 +15,8 @@
     "start": "tsx src/main.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "billing:refund": "tsx src/billing-refund.ts"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.9",

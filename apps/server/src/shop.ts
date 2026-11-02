@@ -22,7 +22,7 @@ const SWEEP_LEASE_MS = 60_000;
 
 // Runs something that needs the payment provider; its failures become an error the customer or
 // merchant can read instead of a bare 500.
-async function providerCall<T>(fn: () => Promise<T>): Promise<T> {
+export async function providerCall<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } catch (err) {

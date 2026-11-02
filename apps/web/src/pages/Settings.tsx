@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { Link } from "react-router";
 import { get, message, post } from "../api.ts";
 import { useSession } from "../session.tsx";
 import { useStudio } from "../studio.tsx";
@@ -146,6 +147,14 @@ export function Settings() {
           <Card title="店铺地址">
             <div className="link-box">{shop.url}</div>
             <p className="subtle">店铺地址开店时生成，暂时不能修改。</p>
+          </Card>
+          <Card title="套餐">
+            <p className="subtle">专业版 ¥29/月，含自定义域名和网站托管与维护。</p>
+            <div>
+              <Link className="btn" to="/billing">
+                套餐与续费
+              </Link>
+            </div>
           </Card>
           <Card title="账号">
             <div className="stack" style={{ gap: 2 }}>

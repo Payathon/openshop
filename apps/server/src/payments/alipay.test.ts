@@ -3,7 +3,9 @@ import { eq } from "drizzle-orm";
 import { AlipaySdk, type AlipaySdkCommonResult } from "alipay-sdk";
 import { fen } from "@openshop/core";
 import { describe, expect, it } from "vitest";
-import { orders } from "../db/schema.ts";
+import { createApp } from "../app.ts";
+import { Billing } from "../billing.ts";
+import { billingPayments, orders } from "../db/schema.ts";
 import { BASE, customer, setup } from "../test-helpers.ts";
 import { ALIPAY_SANDBOX_GATEWAY, AlipayPagePayProvider, beijingTime, type AlipayClient } from "./alipay.ts";
 
@@ -202,5 +204,38 @@ describe("Alipay in the shop", () => {
     await t.shop.syncPayments();
     expect(await statusOf()).toBe("expired");
     expect(gw.calls.map((c) => c.method)).toContain("alipay.trade.close");
+  });
+});
+
+describe("Alipay for 专业版 billing", () => {
+  // The platform's own app, beside the shops' fake cashier.
+  async function billed() {
+    const { gw, alipayPay } = provider();
+    const t = await setup();
+    const { token } = await t.nailStudio();
+    const billing = new Billing({ db: t.db, payments: alipayPay, clock: () => t.shop.now(), baseUrl: BASE });
+    const app = createApp(t.shop, t.payments, { billing });
+    const call = async (method: string, path: string) => (await app.request(`${BASE}${path}`, { method, headers: { authorization: `Bearer ${token}` } })).json();
+    const notify = (form: Record<string, string>, path = "/payments/platform-alipay/notify") =>
+      app.request(`${BASE}${path}`, { method: "POST", body: new URLSearchParams(form), headers: { "content-type": "application/x-www-form-urlencoded" } });
+    const statusOf = async (id: string) => (await t.db.select({ status: billingPayments.status }).from(billingPayments).where(eq(billingPayments.id, id)))[0]!.status;
+    return { gw, app, call, notify, statusOf };
+  }
+
+  it("takes the payment on the platform's Alipay app and confirms it on notification", async () => {
+    const { gw, app, call, notify, statusOf } = await billed();
+    const { id, paymentUrl } = await call("POST", "/api/merchant/billing/checkout");
+    expect(paymentUrl.startsWith(`${ALIPAY_SANDBOX_GATEWAY}?`)).toBe(true);
+    expect(JSON.parse(new URL(paymentUrl).searchParams.get("biz_content")!)).toMatchObject({ out_trade_no: id, total_amount: "29.00" });
+    expect(await (await app.request(`${BASE}/healthz`)).json()).toEqual({ ok: true, payments: "fake", billing: "alipay" });
+
+    gw.trades.set(id, "TRADE_SUCCESS");
+    // The shops' notify route belongs to the shops' provider, which isn't Alipay here.
+    expect((await notify(notification(id), "/payments/alipay/notify")).status).toBe(404);
+    expect((await notify({ ...notification(id), sign: "forged" })).status).toBe(400);
+    const res = await notify(notification(id));
+    expect(await res.text()).toBe("success");
+    expect(await statusOf(id)).toBe("paid");
+    expect((await call("GET", "/api/merchant/billing")).plan).toBe("pro");
   });
 });

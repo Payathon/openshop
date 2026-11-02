@@ -26,3 +26,9 @@ export async function connectPglite(dataDir?: string): Promise<Db> {
   await migrate(db, { migrationsFolder });
   return db as unknown as Db;
 }
+
+// What main.ts and the operator scripts use: DATABASE_URL selects Postgres; without it, an
+// in-process PGlite database under .data/.
+export async function connectFromEnv(): Promise<Db> {
+  return process.env.DATABASE_URL ? connectPostgres(process.env.DATABASE_URL) : connectPglite(process.env.PGLITE_DIR ?? ".data/pglite");
+}
