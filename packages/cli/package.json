@@ -5,7 +5,7 @@
   "license": "MIT",
   "type": "module",
   "bin": {
-    "openshop": "./dist/openshop.mjs"
+    "openshop": "dist/openshop.mjs"
   },
   "files": [
     "dist"
