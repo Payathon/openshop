@@ -277,14 +277,20 @@ async function seedDining(app: App, base: string, pay: boolean) {
   ], pay);
 }
 
-// Creates whichever demo accounts are missing; true if it created any.
-export async function seedAccounts(app: App, base: string, opts: { pay?: boolean } = {}): Promise<boolean> {
+// Creates whichever demo accounts are missing; true if it created any. `grant` gives a seeded
+// shop 专业版 without payment (main.ts: a long grant), so it keeps taking orders after the trial.
+export async function seedAccounts(
+  app: App,
+  base: string,
+  opts: { pay?: boolean; grant?: (slug: string) => Promise<unknown> } = {},
+): Promise<boolean> {
   const pay = opts.pay ?? true;
+  const grant = opts.grant ?? (async () => {});
   let created = false;
   const seeds: [string, () => Promise<unknown>][] = [
-    [DEMO.email, () => seedNail(app, base, pay)],
-    [FASHION.email, () => seedFashion(app, base, pay)],
-    [DINING.email, () => seedDining(app, base, pay)],
+    [DEMO.email, () => seedNail(app, base, pay).then(() => grant(DEMO.slug))],
+    [FASHION.email, () => seedFashion(app, base, pay).then(() => grant(FASHION.slug))],
+    [DINING.email, () => seedDining(app, base, pay).then(() => grant(DINING.slug))],
     [TRY.email, () => client(app, base)("POST", "/api/auth/register", { name: TRY.name, email: TRY.email, password: TRY.password })],
   ];
   for (const [email, seed] of seeds) {

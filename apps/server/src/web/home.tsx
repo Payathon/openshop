@@ -206,7 +206,7 @@ export function HomePage(p: { shops: DemoShop[] }) {
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <title>OpenShop：开一家 AI 也能下单的店</title>
-        <meta name="description" content="填一张表就有自己的店铺网站。顾客可以在微信里下单，也可以让 AI 助手替他预约、购买。免费开店。" />
+        <meta name="description" content="填一张表就有自己的店铺网站，免费开店。开通专业版，顾客可以在微信里下单，也可以让 AI 助手替他预约、购买。" />
         <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='9' width='26' height='21' rx='6' fill='%235ee39b'/%3E%3C/svg%3E" />
         <style dangerouslySetInnerHTML={{ __html: CSS }} />
       </head>
@@ -386,42 +386,44 @@ export function HomePage(p: { shops: DemoShop[] }) {
         <Section id="pricing" tone="deep">
           <h2 class="big">开店免费</h2>
           <div class="plans">
-            <div class="plan main">
+            <div class="plan">
               <h3>免费版</h3>
               <p class="price">
-                ¥0<small>不限时间</small>
+                ¥0<small>不限时间，只做展示</small>
               </p>
               <ul>
-                <li>店铺网站和全部四个模板</li>
-                <li>预约服务和快递商品</li>
-                <li>顾客的 AI 助手下单（MCP 和 Skill）</li>
-                <li>支付宝收款，自动退款</li>
+                <li>店铺网站和全部模板</li>
+                <li>商品与服务展示</li>
+                <li>营业时间、地址和联系电话</li>
                 <li>商家后台，手机上也能用</li>
               </ul>
-              <a class="btn solid" href="/admin/register">
+              <a class="btn" href="/admin/register">
                 免费开店
               </a>
             </div>
-            <div class="plan">
+            <div class="plan main">
               <h3>专业版</h3>
               <p class="price">
                 ¥29<small>每月，按月购买</small>
               </p>
               <ul>
+                <li>在线预约和下单</li>
+                <li>支付宝收款与自动退款</li>
+                <li>顾客的 AI 助手下单（MCP 和 Skill）</li>
+                <li>订单与顾客管理</li>
                 <li>自定义域名</li>
                 <li>去掉 OpenShop 标识</li>
                 <li>更多次数的 AI 改店</li>
-                <li>更多高级模块</li>
                 <li>网站托管与维护</li>
               </ul>
-              <a class="btn" href="/admin/billing">
+              <a class="btn solid" href="/admin/billing">
                 开通专业版
               </a>
             </div>
           </div>
           <p class="stat">
-            <strong>AI 助手下单永远免费</strong>
-            顾客的 AI 助手来你店里下单，不收你任何额外费用。
+            <strong>新店前 14 天免费体验专业版的全部功能</strong>
+            开店当天就能接单、收款，让顾客的 AI 助手来下单试试，满意再开通。
           </p>
         </Section>
 

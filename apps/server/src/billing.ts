@@ -2,7 +2,7 @@ import { and, asc, desc, eq, gt, max } from "drizzle-orm";
 import { fen, PAYMENT_TIMEOUT_MS } from "@openshop/core";
 import type { Db } from "./db/client.ts";
 import { acquireLease, releaseLease } from "./db/lease.ts";
-import { billingPayments, shops } from "./db/schema.ts";
+import { billingPayments, planGrants, shops } from "./db/schema.ts";
 import type { PaymentProvider } from "./payments/provider.ts";
 import { newId, providerCall, ShopError } from "./shop.ts";
 
@@ -14,6 +14,11 @@ import { newId, providerCall, ShopError } from "./shop.ts";
 // One plan, bought one month at a time.
 export const PRO_PRICE_FEN = 2900;
 const PRO_MONTHS = 1;
+
+// Every new shop has 专业版 for its first 14 days, counted from when it was created, so a
+// merchant can take a real order before deciding to pay.
+export const TRIAL_DAYS = 14;
+const DAY_MS = 86_400_000;
 
 // Billing payment ids are the out_trade_no. The prefix tells them from order ids (ord_…), which
 // is how the fake cashier routes a payment to the right provider.
@@ -66,6 +71,67 @@ export function addMonths(d: Date, months: number): Date {
   return new Date(local.getTime() - 8 * 3_600_000);
 }
 
+export type PlanSource = "trial" | "paid" | "grant";
+
+export interface Plan {
+  plan: "pro" | "free";
+  // What the 专业版 run covering now ends with, and when it ends. Null on the free plan.
+  source: PlanSource | null;
+  until: Date | null;
+  trialEndsAt: Date;
+}
+
+// The one answer to "is this shop on 专业版": everything that only 专业版 can do (taking orders
+// first of all) asks here. 专业版 is any period covering now: the trial, a paid and unrefunded
+// billing payment, or a grant. `until` follows periods that run on end to end, so a merchant who
+// paid during the trial sees the paid month's end, not the trial's.
+export async function planOf(db: Db, shopId: string, now: Date): Promise<Plan> {
+  const [shop] = await db.select({ createdAt: shops.createdAt }).from(shops).where(eq(shops.id, shopId));
+  if (!shop) throw new ShopError(404, "shop_not_found", "找不到店铺");
+  const trialEndsAt = new Date(shop.createdAt.getTime() + TRIAL_DAYS * DAY_MS);
+  const paid = await db
+    .select({ start: billingPayments.periodStart, end: billingPayments.periodEnd })
+    .from(billingPayments)
+    .where(and(eq(billingPayments.shopId, shopId), eq(billingPayments.status, "paid"), gt(billingPayments.periodEnd, now)));
+  const grants = await db
+    .select({ start: planGrants.periodStart, end: planGrants.periodEnd })
+    .from(planGrants)
+    .where(and(eq(planGrants.shopId, shopId), gt(planGrants.periodEnd, now)));
+  // Ties go to the more lasting kind: paid, then grant, then trial.
+  const periods: { start: Date; end: Date; source: PlanSource }[] = [
+    ...paid.map((p) => ({ start: p.start!, end: p.end!, source: "paid" as const })),
+    ...grants.map((g) => ({ ...g, source: "grant" as const })),
+    { start: shop.createdAt, end: trialEndsAt, source: "trial" as const },
+  ];
+  let until: Date | null = null;
+  let source: PlanSource | null = null;
+  // Extend from now through every period that starts before the run so far ends.
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const p of periods) {
+      const reach = until ?? now;
+      if (p.start <= reach && p.end > reach) {
+        until = p.end;
+        source = p.source;
+        grew = true;
+      }
+    }
+  }
+  return { plan: until ? "pro" : "free", source, until, trialEndsAt };
+}
+
+// Demo shops keep taking orders for a year after they are seeded (seed.ts, seed-accounts.ts).
+export const DEMO_GRANT_DAYS = 365;
+
+// 专业版 from now for `days` days, without payment, for demo and partner shops. Grants don't
+// stack: one covers now to now + days, so granting again can only move the end later.
+export async function grantPro(db: Db, shopId: string, days: number, now: Date) {
+  if (!Number.isInteger(days) || days < 1) throw new ShopError(400, "invalid_request", "天数必须是正整数");
+  const row = { id: newId("grant"), shopId, days, periodStart: now, periodEnd: new Date(now.getTime() + days * DAY_MS), createdAt: now };
+  await db.insert(planGrants).values(row);
+  return { grant: row, plan: await planOf(db, shopId, now) };
+}
+
 export class Billing {
   readonly db: Db;
   readonly payments: PaymentProvider;
@@ -89,16 +155,20 @@ export class Billing {
     for (const b of pending) {
       await this.refresh(b).catch((err: unknown) => console.error(`billing refresh: ${b.id}:`, err));
     }
-    const proUntil = await this.proUntil(this.db, shopId);
+    const plan = await planOf(this.db, shopId, this.clock());
     const recent = await this.db
       .select()
       .from(billingPayments)
       .where(eq(billingPayments.shopId, shopId))
       .orderBy(desc(billingPayments.createdAt))
       .limit(20);
+    // The latest end the shop ever had, for "已于…到期" once it has lapsed.
+    const lapsed = plan.until ? null : await this.lastEnd(shopId, plan.trialEndsAt);
     return {
-      plan: proUntil && proUntil > this.clock() ? ("pro" as const) : ("free" as const),
-      proUntil: proUntil?.toISOString() ?? null,
+      plan: plan.plan,
+      source: plan.source,
+      proUntil: (plan.until ?? lapsed)?.toISOString() ?? null,
+      trialEndsAt: plan.trialEndsAt.toISOString(),
       priceFen: PRO_PRICE_FEN,
       payments: recent.map(render),
     };
@@ -205,9 +275,10 @@ export class Billing {
       await tx.select({ id: shops.id }).from(shops).where(eq(shops.id, found.shopId)).for("update");
       const [locked] = await tx.select().from(billingPayments).where(eq(billingPayments.id, id)).for("update");
       if (!locked || locked.status !== "pending") return;
-      const until = await this.proUntil(tx, locked.shopId);
-      // Renewing while active extends from the current end; otherwise the month starts now.
-      const periodStart = until && until > now ? until : now;
+      // Paying while on 专业版 (trial, an earlier month, a grant) adds the month after the
+      // current run ends, so no trial day is lost; otherwise the month starts now.
+      const { until } = await planOf(tx, locked.shopId, now);
+      const periodStart = until ?? now;
       await tx
         .update(billingPayments)
         .set({ status: "paid", paidAt: now, periodStart, periodEnd: addMonths(periodStart, locked.months) })
@@ -217,9 +288,9 @@ export class Billing {
 
   // Refunds a paid payment in full, once. There is no platform admin UI; the operator runs
   // billing-refund.ts. Its months stop counting, so the shop's 专业版 ends where the previous
-  // payment's period does, or now if the refunded month was already in use. Only the shop's
-  // latest period can be refunded: taking out one in the middle would leave a gap, and the
-  // operator can refund later ones first.
+  // payment's period, the trial or a grant does, or now if the refunded month was already in
+  // use. Only the shop's latest period can be refunded: taking out one in the middle would
+  // leave a gap, and the operator can refund later ones first.
   // The refund call runs inside the transaction, holding the shop row: if it fails nothing
   // changes, and if the commit fails a retry repeats the same out_request_no (<id>-refund),
   // which Alipay refunds only once.
@@ -231,7 +302,8 @@ export class Billing {
       await tx.select({ id: shops.id }).from(shops).where(eq(shops.id, found.shopId)).for("update");
       const [locked] = await tx.select().from(billingPayments).where(eq(billingPayments.id, id)).for("update");
       const b = locked!;
-      const until = async () => (await this.proUntil(tx, b.shopId))?.toISOString() ?? null;
+      // Where 专业版 ends afterwards, counting the trial and grants; null if it has ended.
+      const until = async () => (await planOf(tx, b.shopId, now)).until?.toISOString() ?? null;
       if (b.status === "refunded") return { payment: render(b), refundedNow: false, proUntil: await until() };
       if (b.status !== "paid") throw new ShopError(409, "not_paid", "这笔付款没有付成功，不能退款");
       if (b.periodEnd!.getTime() !== (await this.proUntil(tx, b.shopId))?.getTime()) {
@@ -241,6 +313,20 @@ export class Billing {
       const [done] = await tx.update(billingPayments).set({ status: "refunded", refundedAt: now }).where(eq(billingPayments.id, id)).returning();
       return { payment: render(done!), refundedNow: true, proUntil: await until() };
     });
+  }
+
+  // When the shop's 专业版 last ended: the trial, its last paid month or its last grant.
+  private async lastEnd(shopId: string, trialEndsAt: Date): Promise<Date> {
+    const paid = await this.proUntil(this.db, shopId);
+    const [g] = await this.db.select({ until: max(planGrants.periodEnd) }).from(planGrants).where(eq(planGrants.shopId, shopId));
+    return [paid, g?.until ?? null].reduce<Date>((a, b) => (b && b > a ? b : a), trialEndsAt);
+  }
+
+  // Operator-only (billing-grant.ts): 专业版 for the shop with this slug, see grantPro.
+  async grant(slug: string, days: number) {
+    const [shop] = await this.db.select({ id: shops.id, name: shops.name }).from(shops).where(eq(shops.slug, slug));
+    if (!shop) throw new ShopError(404, "shop_not_found", `找不到店铺 ${slug}`);
+    return { shop, ...(await grantPro(this.db, shop.id, days, this.clock())) };
   }
 
   // Only paid, unrefunded months count.

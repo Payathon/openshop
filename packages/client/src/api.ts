@@ -22,6 +22,8 @@ export interface Shop {
   address: string | null;
   schedule: { weekly: { weekday: number; open: string; close: string }[]; capacity: number } | null;
   cancelPolicy: { freeCancelHoursBefore: number };
+  // False when the shop is on the free plan: it can be browsed, but orders are refused.
+  acceptsOrders: boolean;
 }
 
 export type OrderOption =

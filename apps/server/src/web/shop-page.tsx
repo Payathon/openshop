@@ -21,6 +21,15 @@ type Render<T extends SectionType> = (s: SectionOf<T>, ctx: PageCtx) => Child;
 
 const Hint = (p: { children: Child }) => <p class="muted hint">{p.children}</p>;
 
+// Above the products of a shop on the free plan: it can't take orders online, so call.
+const CallNote = (p: { shop: PublicShop; booking: boolean }) => (
+  <a class="call-note" href={`tel:${p.shop.phone}`}>
+    <span class="grow">暂不支持在线{p.booking ? "预约" : "下单"}，{p.booking ? "电话预约" : "联系店铺"}</span>
+    <strong>{p.shop.phone}</strong>
+    <Icon name="phone" />
+  </a>
+);
+
 function fromPrice(p: PublicProduct) {
   const prices = p.variants.map((v) => v.priceFen);
   const low = Math.min(...prices);
@@ -45,7 +54,7 @@ const header: Render<"header"> = (s, { shop, urls, sections }) => (
   </>
 );
 
-const banner: Render<"banner"> = (s, { products, urls }) => {
+const banner: Render<"banner"> = (s, { shop, products, urls }) => {
   const target = s.props.productId ? products.find((p) => p.id === s.props.productId) : undefined;
   const cls = s.props.image ? "hero with-img" : "hero";
   const body = (
@@ -54,7 +63,7 @@ const banner: Render<"banner"> = (s, { products, urls }) => {
       <div class="hero-body">
         <h2 class="hero-title">{s.props.title}</h2>
         {s.props.subtitle ? <p class="hero-sub">{s.props.subtitle}</p> : null}
-        {target ? <span class="hero-btn">{target.fulfillment === "booking" ? "立即预约" : "去看看"}</span> : null}
+        {target ? <span class="hero-btn">{target.fulfillment === "booking" && shop.acceptsOrders ? "立即预约" : "去看看"}</span> : null}
       </div>
     </>
   );
@@ -82,6 +91,7 @@ const products: Render<"products"> = (s, ctx) => {
         </div>
       ) : null}
       {shown.length === 0 ? <p class="muted">店主还没有上架商品。</p> : null}
+      {shown.length > 0 && !ctx.shop.acceptsOrders ? <CallNote shop={ctx.shop} booking={shown.some((p) => p.fulfillment === "booking")} /> : null}
       <div class={layout === "grid" ? "grid" : "list"}>
         {shown.map((p) => {
           const href = `${ctx.urls.shop}/p/${p.id}`;
@@ -121,7 +131,11 @@ const products: Render<"products"> = (s, ctx) => {
                 {p.description ? <p class="row-desc">{p.description}</p> : null}
                 <div class="row-foot">
                   <span class="row-meta">{meta}</span>
-                  {gone ? <span class="row-cta off">已售罄</span> : <span class="row-cta">{p.fulfillment === "booking" ? "预约" : "购买"}</span>}
+                  {gone ? (
+                    <span class="row-cta off">已售罄</span>
+                  ) : ctx.shop.acceptsOrders ? (
+                    <span class="row-cta">{p.fulfillment === "booking" ? "预约" : "购买"}</span>
+                  ) : null}
                 </div>
               </div>
             </a>
@@ -167,7 +181,7 @@ const booking: Render<"booking"> = (s, { shop, preview, now }) => {
       </details>
       <dl class="week-full">{days}</dl>
       {s.props.note ? <p class="fine">{s.props.note}</p> : null}
-      <p class="fine">预约开始前 {shop.cancelPolicy.freeCancelHoursBefore} 小时以上可免费取消，自动退款。</p>
+      {shop.acceptsOrders ? <p class="fine">预约开始前 {shop.cancelPolicy.freeCancelHoursBefore} 小时以上可免费取消，自动退款。</p> : null}
     </section>
   );
 };
@@ -232,10 +246,10 @@ const custom_html: Render<"custom_html"> = (s) => <section class="section custom
 
 const RENDER: { [T in SectionType]: Render<T> } = { header, banner, products, booking, gallery, text, contact, custom_html };
 
-// Shows the floating button once the product list has scrolled out of view.
+// Shows the floating button once the product list (data-after) has scrolled out of view.
 const FLOAT_SCRIPT = `(() => {
   const cta = document.querySelector(".float-cta");
-  const target = document.querySelector(cta.getAttribute("href"));
+  const target = document.querySelector(cta.dataset.after);
   if (!target || !("IntersectionObserver" in window)) return;
   let seen = false;
   new IntersectionObserver(([e]) => {
@@ -251,7 +265,7 @@ export function ShopPage(ctx: Omit<PageCtx, "sections"> & { page: PageConfig }) 
   return (
     <Layout
       title={preview ? `预览：${shop.name}` : shop.name}
-      description={shop.description || `${shop.name}：在线预约和购买`}
+      description={shop.description || (shop.acceptsOrders ? `${shop.name}：在线预约和购买` : `${shop.name}：商品与服务、营业时间和联系电话`)}
       theme={ctx.page.theme}
       head={
         preview ? (
@@ -268,17 +282,22 @@ export function ShopPage(ctx: Omit<PageCtx, "sections"> & { page: PageConfig }) 
       {preview ? <PreviewBar /> : null}
       {ctx.page.sections.map((s) => (RENDER[s.type] as Render<SectionType>)(s, { ...ctx, sections: ctx.page.sections }))}
       <footer class="site-footer">
-        {preview ? null : (
+        {preview ? null : shop.acceptsOrders ? (
           <p>
             也可以让你的 AI 助手来下单：<a href={`${urls.shop}/llms.txt`}>下单说明</a>
+          </p>
+        ) : (
+          <p>
+            暂不支持在线下单，请致电 <a href={`tel:${shop.phone}`}>{shop.phone}</a>
           </p>
         )}
         <p>© {shop.name}</p>
       </footer>
       {list && ctx.products.length > 0 ? (
         <>
-          <a class="btn float-cta" href={`#${list.id}`}>
-            {books ? "立即预约" : "去选购"}
+          {/* On the free plan the button calls the shop instead of jumping to the products. */}
+          <a class="btn float-cta" href={shop.acceptsOrders ? `#${list.id}` : `tel:${shop.phone}`} data-after={`#${list.id}`}>
+            {shop.acceptsOrders ? (books ? "立即预约" : "去选购") : books ? `电话预约 ${shop.phone}` : `联系店铺 ${shop.phone}`}
           </a>
           <script dangerouslySetInnerHTML={{ __html: FLOAT_SCRIPT }} />
         </>

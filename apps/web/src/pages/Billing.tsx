@@ -17,17 +17,33 @@ interface BillingPayment {
   refundedAt: string | null;
 }
 
-interface Billing {
+export interface Billing {
   plan: "free" | "pro";
+  // What the current 专业版 run ends with: the 14-day trial, a paid month, or a grant from us.
+  source: "trial" | "paid" | "grant" | null;
+  // When 专业版 ends, or ended once it has lapsed.
   proUntil: string | null;
+  trialEndsAt: string;
   priceFen: number;
   payments: BillingPayment[];
 }
 
-// Same list as the homepage's pricing section, plus the upkeep the fee pays for.
-const PRO_FEATURES = ["自定义域名", "去掉 OpenShop 标识", "更多次数的 AI 改店", "更多高级模块", "网站托管与维护"];
+// Same list as the homepage's pricing section. The free plan is the website only.
+const PRO_FEATURES = [
+  "在线预约和下单",
+  "支付宝收款与自动退款",
+  "顾客的 AI 助手下单（MCP 和 Skill）",
+  "订单与顾客管理",
+  "自定义域名",
+  "去掉 OpenShop 标识",
+  "更多次数的 AI 改店",
+  "网站托管与维护",
+];
 
-const fullDate = (iso: string) => new Date(iso).toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai", year: "numeric", month: "long", day: "numeric" });
+export const fullDate = (iso: string) => new Date(iso).toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai", year: "numeric", month: "long", day: "numeric" });
+
+// Whole days left, counting a part day as one, so the last day reads 还剩 1 天.
+export const daysLeft = (iso: string) => Math.max(1, Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000));
 
 // Back from the cashier, Alipay may take a moment to report the payment; each read asks it.
 const POLL_MS = 2_000;
@@ -107,10 +123,16 @@ export function BillingPage() {
             <div className="stack" style={{ gap: 2 }}>
               <div className="row">
                 <strong>{pro ? "专业版" : "免费版"}</strong>
-                {pro && <Badge tone="success">使用中</Badge>}
+                {billing.source === "trial" && <Badge tone="info">试用中</Badge>}
+                {billing.source === "paid" && <Badge tone="success">使用中</Badge>}
+                {billing.source === "grant" && <Badge tone="success">赠送</Badge>}
               </div>
               <div className="subtle">
-                {pro ? `${fullDate(billing.proUntil!)} 到期` : billing.proUntil ? `专业版已于 ${fullDate(billing.proUntil)} 到期` : "开店、收款、AI 助手下单都免费"}
+                {billing.source === "trial"
+                  ? `试用到 ${fullDate(billing.proUntil!)}，还剩 ${daysLeft(billing.proUntil!)} 天。在试用期内开通，从试用结束那天开始算，不浪费试用的天数。`
+                  : pro
+                    ? `${fullDate(billing.proUntil!)} 到期`
+                    : `专业版已于 ${fullDate(billing.proUntil ?? billing.trialEndsAt)} 到期。店铺目前只能展示，顾客无法在线下单，只能打电话联系你。`}
               </div>
             </div>
           </div>
@@ -123,10 +145,10 @@ export function BillingPage() {
             <li key={f}>{f}</li>
           ))}
         </ul>
-        <p className="subtle">按月购买，每次一个月，不自动续费。到期前续费，从原到期日往后顺延一个月。顾客的 AI 助手下单永远免费。</p>
+        <p className="subtle">按月购买，每次一个月，不自动续费。到期前（包括试用期内）续费，从原到期日往后顺延一个月。免费版只有店铺网站：商品展示、营业时间、地址和电话。</p>
         <div>
           <button className="btn primary" onClick={() => void checkout()} disabled={busy || !billing}>
-            {busy ? "正在打开支付宝…" : pro ? "续费一个月" : "开通专业版"}
+            {busy ? "正在打开支付宝…" : billing?.source === "paid" ? "续费一个月" : "开通专业版"}
           </button>
         </div>
       </Card>

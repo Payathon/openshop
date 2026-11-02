@@ -81,12 +81,17 @@ describe("merchant accounts", () => {
     expect(home).not.toContain('id="shops"');
     expect(home).toContain('href="/admin/billing"');
     expect(home).not.toContain("即将推出");
+    expect(home).toContain("新店前 14 天免费体验专业版的全部功能");
+    expect(home).not.toContain("永远免费");
   });
 
   it("seeds finished shops and an account still to onboard, once", async () => {
     const t = await setup();
-    expect(await seedAccounts(t.app, BASE)).toBe(true);
-    expect(await seedAccounts(t.app, BASE)).toBe(false);
+    const granted: string[] = [];
+    const grant = async (slug: string) => granted.push((await t.billing.grant(slug, 365)).shop.id);
+    expect(await seedAccounts(t.app, BASE, { grant })).toBe(true);
+    expect(await seedAccounts(t.app, BASE, { grant })).toBe(false);
+    expect(granted).toHaveLength(3);
 
     const demo = browser(t.app);
     await demo("POST", "/api/auth/login", { email: DEMO.email, password: DEMO.password });
@@ -99,8 +104,9 @@ describe("merchant accounts", () => {
     const orders = (await demo("GET", "/api/merchant/orders")).body as { status: string; source: string }[];
     expect(orders.filter((o) => o.status === "confirmed")).toHaveLength(2);
     expect(orders.some((o) => o.source === "agent")).toBe(true);
-    // The public shops are up, each on its own template.
-    expect((await t.call("GET", `/api/s/${DEMO.slug}`)).status).toBe(200);
+    // The public shops are up, each on its own template, and keep taking orders after the trial.
+    t.advance(30 * 86_400_000);
+    expect(await t.ok("GET", `/api/s/${DEMO.slug}`)).toMatchObject({ acceptsOrders: true });
     for (const [slug, style] of [[FASHION.slug, "fashion"], [DINING.slug, "dining"]]) {
       expect(await (await t.app.request(`${BASE}/s/${slug}`)).text()).toContain(`<body data-style="${style}">`);
     }

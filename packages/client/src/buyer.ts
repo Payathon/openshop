@@ -190,6 +190,9 @@ function presentShop(s: Shop) {
     description: s.description,
     phone: s.phone,
     address: s.address,
+    acceptsOrders: s.acceptsOrders,
+    // Said up front, so the agent doesn't walk the user through an order the shop will refuse.
+    ...(s.acceptsOrders ? {} : { note: `这家店暂不支持在线下单。可以介绍商品和营业时间，预约或购买请用户致电 ${s.phone} 联系店铺。` }),
     // Only shops that take bookings have opening hours and a cancellation window.
     ...(s.schedule
       ? {

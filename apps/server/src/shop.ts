@@ -12,6 +12,7 @@ import {
   type CancelPolicy,
   type OrderStatus,
 } from "@openshop/core";
+import { planOf } from "./billing.ts";
 import type { Db } from "./db/client.ts";
 import { acquireLease, releaseLease } from "./db/lease.ts";
 import { customers, orderItems, orders, products, shops, variants, type Address, type StoredSchedule } from "./db/schema.ts";
@@ -34,7 +35,7 @@ export async function providerCall<T>(fn: () => Promise<T>): Promise<T> {
 
 export class ShopError extends Error {
   constructor(
-    readonly status: 400 | 401 | 404 | 409 | 413 | 415 | 502,
+    readonly status: 400 | 401 | 403 | 404 | 409 | 413 | 415 | 502,
     readonly code: string,
     message: string,
   ) {
@@ -73,7 +74,9 @@ export interface NewOrder {
   source?: "web" | "agent" | undefined;
 }
 
-const publicShop = (s: ShopRow) => ({
+// acceptsOrders: on 专业版 (billing.ts, planOf). A free shop is a website only: customers see
+// it and its products, and call the shop to book or buy.
+const publicShop = (s: ShopRow, acceptsOrders: boolean) => ({
   id: s.id,
   slug: s.slug,
   name: s.name,
@@ -83,6 +86,7 @@ const publicShop = (s: ShopRow) => ({
   address: s.address,
   schedule: s.schedule && { weekly: s.schedule.weekly, capacity: s.schedule.capacity },
   cancelPolicy: s.cancelPolicy,
+  acceptsOrders,
 });
 
 const publicProduct = (p: ProductRow, vs: VariantRow[]) => ({
@@ -177,7 +181,8 @@ export class OpenShop {
     };
     const inserted = await this.db.insert(shops).values(row).onConflictDoNothing({ target: shops.slug }).returning();
     if (inserted.length === 0) throw new ShopError(409, "slug_taken", `店铺地址 ${input.slug} 已被使用`);
-    return { shop: publicShop(row), merchantToken: token };
+    // A new shop starts its 专业版 trial.
+    return { shop: publicShop(row, true), merchantToken: token };
   }
 
   // Returns the shop id the merchant token belongs to.
@@ -187,7 +192,14 @@ export class OpenShop {
   }
 
   async getShop(slug: string) {
-    return publicShop(await this.shopBySlug(slug));
+    const s = await this.shopBySlug(slug);
+    return publicShop(s, await this.acceptsOrders(s.id));
+  }
+
+  // Only 专业版 takes new orders. Orders already placed carry on either way: payment, cancelling,
+  // refunds, shipping and completing don't ask.
+  async acceptsOrders(shopId: string) {
+    return (await planOf(this.db, shopId, this.clock())).plan === "pro";
   }
 
   // Customers (web, API, MCP, CLI) only ever reach live shops; drafts look like they don't exist.
@@ -297,6 +309,11 @@ export class OpenShop {
 
   async createOrder(slug: string, input: NewOrder) {
     const shop = await this.shopBySlug(slug);
+    // Every way in (API, shop page, MCP, CLI) ends here. Not 402: to an agent that means "pay
+    // this request", and there is nothing for the customer to pay.
+    if (!(await this.acceptsOrders(shop.id))) {
+      throw new ShopError(403, "shop_not_accepting_orders", `${shop.name}暂不支持在线下单，请致电 ${shop.phone} 联系店铺预约或购买`);
+    }
     await this.settleExpired(shop.id);
     if (input.items.length === 0) throw new ShopError(400, "invalid_request", "订单里没有商品");
 

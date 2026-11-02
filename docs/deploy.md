@@ -117,6 +117,30 @@ docker compose exec app node --import tsx src/billing-refund.ts bill_xxxxxxxxxxx
 
 付款号（`bill_…`）这样查：`docker compose exec postgres psql -U openshop -c "select b.id, s.slug, b.status, b.paid_at from billing_payments b join shops s on s.id = b.shop_id order by b.created_at desc limit 20"`。只能退这家店最后一笔付款，要退更早的先退后面的。重复执行不会退两次。本地用 `pnpm --filter @openshop/server billing:refund bill_…`。
 
+## 赠送专业版
+
+演示店和合作店不付款也要能接单时，送一段专业版。不调支付宝，只写数据库：
+
+```bash
+cd /opt/openshop
+docker compose exec app node --import tsx src/billing-grant.ts <店铺地址> <天数>
+```
+
+从现在起覆盖这么多天。再送一次只会让结束时间更晚，不会缩短。本地用 `pnpm --filter @openshop/server billing:grant <店铺地址> <天数>`。
+
+**部署免费版只做展示这一版之后（2026-11-03）**，开店超过 14 天、没付过款的店会立刻变成只能展示，顾客下不了单。生产库里已有的演示店要手动送，否则演示时下不了单。先查有哪些：`docker compose exec postgres psql -U openshop -c "select slug, name, created_at from shops order by created_at"`，然后对存在的演示店各跑一次：
+
+```bash
+docker compose exec app node --import tsx src/billing-grant.ts nail-studio 365
+docker compose exec app node --import tsx src/billing-grant.ts bakery 365
+# 开过 SEED_ACCOUNTS=1 才有下面三家
+docker compose exec app node --import tsx src/billing-grant.ts moon-nail 365
+docker compose exec app node --import tsx src/billing-grant.ts baiyi 365
+docker compose exec app node --import tsx src/billing-grant.ts xiangkou 365
+```
+
+之后新建的演示店（全新的数据库）自带 365 天赠送，不用再跑。
+
 ## 备份
 
 每天北京时间 3 点（`BACKUP_HOUR_UTC=19`）自动备份到服务器的 `/opt/openshop/backups/`：

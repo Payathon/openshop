@@ -149,7 +149,7 @@ export function Settings() {
             <p className="subtle">店铺地址开店时生成，暂时不能修改。</p>
           </Card>
           <Card title="套餐">
-            <p className="subtle">专业版 ¥29/月，含自定义域名和网站托管与维护。</p>
+            <p className="subtle">免费版只做展示。专业版 ¥29/月，含在线下单、支付宝收款、顾客的 AI 助手下单、自定义域名和网站托管与维护。</p>
             <div>
               <Link className="btn" to="/billing">
                 套餐与续费

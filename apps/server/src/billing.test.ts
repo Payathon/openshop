@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { addMonths } from "./billing.ts";
-import { BASE, setup, START } from "./test-helpers.ts";
+import { BASE, setup } from "./test-helpers.ts";
 
 const MINUTE = 60_000;
+const DAY = 86_400_000;
+// The test shops are created at START, so their trial ends 14 days later.
+const TRIAL_END = new Date("2026-10-29T10:00:00+08:00").toISOString();
 
 async function merchant() {
   const t = await setup();
@@ -13,9 +16,17 @@ async function merchant() {
 }
 
 describe("专业版 billing", () => {
-  it("starts on the free plan", async () => {
+  it("starts on a 14-day trial counted from shop creation", async () => {
     const { overview } = await merchant();
-    expect(await overview()).toEqual({ plan: "free", proUntil: null, priceFen: 2900, payments: [] });
+    expect(await overview()).toEqual({ plan: "pro", source: "trial", proUntil: TRIAL_END, trialEndsAt: TRIAL_END, priceFen: 2900, payments: [] });
+  });
+
+  it("falls to the free plan when the trial ends", async () => {
+    const { t, overview } = await merchant();
+    t.advance(14 * DAY - MINUTE);
+    expect((await overview()).plan).toBe("pro");
+    t.advance(MINUTE);
+    expect(await overview()).toMatchObject({ plan: "free", source: null, proUntil: TRIAL_END });
   });
 
   it("opens a ¥29 payment on the platform's provider, not the shop's", async () => {
@@ -37,33 +48,34 @@ describe("专业版 billing", () => {
     expect((await overview()).payments).toHaveLength(2);
   });
 
-  it("makes the shop 专业版 for a month once paid, and extends from the end when renewed", async () => {
+  it("adds a month paid during the trial after the trial, and extends from the end when renewed", async () => {
     const { t, checkout, overview } = await merchant();
+    t.advance(3 * DAY);
     const first = await checkout();
     expect(await t.pay(first)).toBe(`${BASE}/admin/billing?paid=${first.id}`);
     const paid = await overview();
-    expect(paid).toMatchObject({ plan: "pro", proUntil: new Date("2026-11-15T10:00:00+08:00").toISOString() });
-    expect(paid.payments[0]).toMatchObject({ id: first.id, status: "paid", periodStart: START.toISOString(), paymentUrl: null });
+    // Paying on day 3 doesn't cost the 11 trial days left.
+    expect(paid).toMatchObject({ plan: "pro", source: "paid", proUntil: new Date("2026-11-29T10:00:00+08:00").toISOString() });
+    expect(paid.payments[0]).toMatchObject({ id: first.id, status: "paid", periodStart: TRIAL_END, paymentUrl: null });
 
-    // Renewing ten days in adds a month to the current end, not to today.
-    t.advance(10 * 86_400_000);
+    // Renewing adds a month to the current end, not to today.
+    t.advance(10 * DAY);
     await t.pay(await checkout());
-    expect((await overview()).proUntil).toBe(new Date("2026-12-15T10:00:00+08:00").toISOString());
+    expect((await overview()).proUntil).toBe(new Date("2026-12-29T10:00:00+08:00").toISOString());
 
     // Reading again doesn't count a payment twice.
     await t.billing.syncPayments();
-    expect((await overview()).proUntil).toBe(new Date("2026-12-15T10:00:00+08:00").toISOString());
+    expect((await overview()).proUntil).toBe(new Date("2026-12-29T10:00:00+08:00").toISOString());
   });
 
   it("starts from the payment time after a lapse", async () => {
     const { t, checkout, overview } = await merchant();
     await t.pay(await checkout());
     await t.billing.syncPayments();
-    t.advance(40 * 86_400_000);
+    t.advance(50 * DAY);
     expect((await overview()).plan).toBe("free");
     await t.pay(await checkout());
-    const now = new Date(START.getTime() + 40 * 86_400_000);
-    expect((await overview()).proUntil).toBe(addMonths(now, 1).toISOString());
+    expect((await overview()).proUntil).toBe(addMonths(t.shop.now(), 1).toISOString());
   });
 
   it("closes a payment left unpaid past its expiry", async () => {
@@ -74,7 +86,7 @@ describe("专业版 billing", () => {
     expect(t.billingPayments.get(id)?.state).toBe("closed");
     expect((await overview()).payments[0]).toMatchObject({ id, status: "closed" });
     expect((await t.app.request(paymentUrl, { method: "POST" })).status).toBe(409);
-    expect((await overview()).plan).toBe("free");
+    expect(await overview()).toMatchObject({ source: "trial", proUntil: TRIAL_END });
   });
 
   it("settles a payment in the sweep without the merchant coming back", async () => {
@@ -91,7 +103,7 @@ describe("专业版 billing", () => {
     const first = await checkout();
     await t.pay(first);
     await t.billing.syncPayments();
-    t.advance(10 * 86_400_000);
+    t.advance(10 * DAY);
     const second = await checkout();
     await t.pay(second);
     await t.billing.syncPayments();
@@ -99,17 +111,19 @@ describe("专业版 billing", () => {
     // Only the latest period can come out.
     await expect(t.billing.refund(first.id)).rejects.toMatchObject({ code: "not_latest" });
     const r = await t.billing.refund(second.id);
-    expect(r).toMatchObject({ refundedNow: true, proUntil: new Date("2026-11-15T10:00:00+08:00").toISOString() });
+    expect(r).toMatchObject({ refundedNow: true, proUntil: new Date("2026-11-29T10:00:00+08:00").toISOString() });
     expect(t.billingPayments.refunds).toEqual([{ orderId: second.id, amountFen: 2900 }]);
-    expect(await overview()).toMatchObject({ plan: "pro", proUntil: new Date("2026-11-15T10:00:00+08:00").toISOString() });
+    expect(await overview()).toMatchObject({ plan: "pro", proUntil: new Date("2026-11-29T10:00:00+08:00").toISOString() });
     expect((await overview()).payments[0]).toMatchObject({ id: second.id, status: "refunded" });
 
     // Again: nothing more is refunded.
     expect(await t.billing.refund(second.id)).toMatchObject({ refundedNow: false });
     expect(t.billingPayments.refunds).toHaveLength(1);
 
-    // The month in use is refunded too: 专业版 ends now. A new payment starts from now.
-    expect(await t.billing.refund(first.id)).toMatchObject({ refundedNow: true, proUntil: null });
+    // Refunding the first too leaves the trial, which still runs a few days.
+    expect(await t.billing.refund(first.id)).toMatchObject({ refundedNow: true, proUntil: TRIAL_END });
+    expect((await overview()).source).toBe("trial");
+    t.advance(5 * DAY);
     expect((await overview()).plan).toBe("free");
     await t.pay(await checkout());
     await t.billing.syncPayments();

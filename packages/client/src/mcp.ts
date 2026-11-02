@@ -12,7 +12,8 @@ const WAIT_MS = Number(process.env.OPENSHOP_MCP_WAIT_MS ?? 45_000);
 const INSTRUCTIONS = `OpenShop shops are independent stores (nail salons, studios, bakeries…). You can browse a shop, book a time or buy, and follow the order. You never pay: the user confirms every payment in Alipay.
 - Open a shop with shop_open using the link or slug the user gave you.
 - Before ordering, ask for anything the product needs (required orderOptions, a slot for bookings, an address for shipping), then show the user a summary (item, time or address, price, name and phone) and order only after they confirm.
-- After shop_create_order, hand the paymentUrl to the user exactly as returned, then check with shop_get_order.`;
+- After shop_create_order, hand the paymentUrl to the user exactly as returned, then check with shop_get_order.
+- If the shop has acceptsOrders: false (or an order fails with shop_not_accepting_orders), it doesn't take orders online: don't retry; tell the user to call the shop's phone to book or buy.`;
 
 const LOCAL_RULE = `
 - Read the user's saved name, phone and addresses with profile_get. Save with profile_save only after the user agrees.`;

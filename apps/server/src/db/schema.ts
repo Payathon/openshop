@@ -134,7 +134,7 @@ export type BillingPlan = "pro";
 export type BillingStatus = "pending" | "paid" | "closed" | "refunded";
 
 // One payment for some months of a plan. The id (bill_…) is the out_trade_no; the prefix tells
-// billing trades apart from orders. The plan is active while the latest period_end is ahead.
+// billing trades apart from orders. Its period counts toward 专业版 while status is paid (planOf).
 export const billingPayments = pgTable(
   "billing_payments",
   {
@@ -154,6 +154,21 @@ export const billingPayments = pgTable(
     refundedAt: timestamp("refunded_at", { withTimezone: true }),
   },
   (t) => [index("billing_payments_shop_idx").on(t.shopId, t.createdAt), index("billing_payments_status_idx").on(t.status)],
+);
+
+// 专业版 given without payment, for demo and partner shops (billing-grant.ts). No provider
+// trade behind it, so it is not a billing payment. A grant covers period_start to period_end.
+export const planGrants = pgTable(
+  "plan_grants",
+  {
+    id: text("id").primaryKey(),
+    shopId: text("shop_id").notNull().references(() => shops.id),
+    days: integer("days").notNull(),
+    periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+    periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("plan_grants_shop_idx").on(t.shopId)],
 );
 
 // Short leases on background jobs, so only one app instance runs a job at a time.

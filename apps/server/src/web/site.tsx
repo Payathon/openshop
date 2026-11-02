@@ -79,6 +79,8 @@ export function shopSite(shop: OpenShop, studio: Studio) {
       industry: row.industry,
       ...content.shop,
       schedule: content.shop.hours && { weekly: content.shop.hours.weekly, capacity: content.shop.hours.capacity },
+      // As live, so the merchant sees the call-the-shop version when the shop is on the free plan.
+      acceptsOrders: await shop.acceptsOrders(row.id),
     };
     const products: PublicProduct[] = content.products.filter((p) => p.published);
     const samples = new Set(content.products.filter((p) => p.sample).map((p) => p.id));

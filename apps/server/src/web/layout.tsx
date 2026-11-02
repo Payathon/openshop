@@ -87,6 +87,9 @@ p{margin:0}
 .row-meta{font-size:13px;color:var(--muted)}
 .row-cta{padding:4px 14px;border:1px solid var(--ink);border-radius:var(--btn-radius);font-size:13px;white-space:nowrap}
 .row-cta.off{border-color:var(--line);color:var(--muted)}
+.call-note{display:flex;align-items:center;gap:10px;margin:0 0 16px;padding:12px 14px;background:var(--tint);border-radius:var(--radius);font-size:14px;text-decoration:none}
+.call-note .grow{flex:1;min-width:0}
+.call-note strong{white-space:nowrap}
 
 /* hours */
 .today{display:flex;align-items:center;gap:8px;font-size:16px}
@@ -128,6 +131,7 @@ details.week[open] summary::after{content:"－"}
 /* buttons and form controls */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:46px;border:1px solid var(--primary);border-radius:var(--btn-radius);background:var(--primary);color:var(--primary-ink);font:inherit;font-size:15px;letter-spacing:.08em;padding:0 22px;text-decoration:none;cursor:pointer;white-space:nowrap}
 .btn[disabled]{opacity:.5;cursor:not-allowed}
+.btn .icon{width:18px;height:18px}
 .btn.ghost{background:transparent;color:var(--ink);border-color:var(--ink)}
 .btn.danger{background:transparent;color:var(--bad);border-color:var(--line)}
 .btn.block{display:flex;width:100%}
@@ -408,6 +412,22 @@ export function TitleBar(p: { shop: PublicShop; home: string; back?: string | un
       <a class="bar-btn" href={`tel:${p.shop.phone}`} aria-label={`打电话给店铺 ${p.shop.phone}`}>
         <Icon name="phone" />
         <span class="bar-phone">{p.shop.phone}</span>
+      </a>
+    </div>
+  );
+}
+
+// Where a free-plan shop would have its checkout: the phone number and a button that calls it.
+export function CallBar(p: { shop: PublicShop; booking: boolean }) {
+  return (
+    <div class="pay-bar">
+      <p class="total">
+        <span class="muted small">店铺电话</span>
+        <strong>{p.shop.phone}</strong>
+      </p>
+      <a class="btn" href={`tel:${p.shop.phone}`}>
+        <Icon name="phone" />
+        {p.booking ? "电话预约" : "联系店铺"}
       </a>
     </div>
   );

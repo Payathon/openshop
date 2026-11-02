@@ -573,6 +573,20 @@ p {
   flex-direction: column;
   gap: 6px;
 }
+/* The plan notice above every page (Shell.tsx), as wide as the page under it. */
+.plan-banner {
+  max-width: 1000px;
+  margin: 0 auto 16px;
+  align-items: center;
+}
+@media (max-width: 760px) {
+  .plan-banner {
+    flex-wrap: wrap;
+  }
+  .plan-banner .btn {
+    flex: 1;
+  }
+}
 
 /* ---- tables & lists ---------------------------------------------------- */
 

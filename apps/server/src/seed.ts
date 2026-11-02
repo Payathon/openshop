@@ -1,10 +1,12 @@
 import type { ProductInput } from "@openshop/core";
+import { DEMO_GRANT_DAYS, grantPro } from "./billing.ts";
 import type { OpenShop } from "./shop.ts";
 import { Studio } from "./studio.ts";
 
 // Two demo shops for local runs: a nail studio (booking) and a bakery (shipping), built the
 // way merchants build theirs: edits in a changeset, then a publish that takes them live.
 // Idempotent: does nothing once the nail studio exists. Returns merchant tokens it created.
+// Both get a long 专业版 grant, so they keep taking orders after the 14-day trial.
 export async function seedDemo(shop: OpenShop) {
   const exists = await shop.getShop("nail-studio").then(
     () => true,
@@ -39,6 +41,7 @@ export async function seedDemo(shop: OpenShop) {
     cancelPolicy: { freeCancelHoursBefore: 24 },
   });
   const nailId = nail.shop.id;
+  await grantPro(shop.db, nailId, DEMO_GRANT_DAYS, shop.now());
   const color = { key: "color", label: "颜色", type: "choice" as const, choices: ["裸粉", "酒红", "奶白", "到店再选"], required: true };
   for (const [name, minutes, priceFen] of [
     ["单色美甲", 60, 12800],
@@ -69,6 +72,7 @@ export async function seedDemo(shop: OpenShop) {
     phone: "13900000000",
   });
   const bakeryId = bakery.shop.id;
+  await grantPro(shop.db, bakeryId, DEMO_GRANT_DAYS, shop.now());
   await studio.propose(bakeryId, {
     kind: "product.create",
     product: product({

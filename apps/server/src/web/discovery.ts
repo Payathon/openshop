@@ -73,6 +73,11 @@ export function llmsTxt(shop: PublicShop, products: PublicProduct[], urls: ShopU
       .map((o) => (o.type === "choice" ? `${o.label}（${o.choices.join("、")}）` : o.label));
     lines.push(`- [${p.name}](${urls.shop}/p/${p.id})（${how}）：${prices}${options.length ? `。下单时需要选择：${options.join("，")}` : ""}`);
   }
+  // A shop on the free plan is a website only: say so instead of explaining how to order.
+  if (!shop.acceptsOrders) {
+    lines.push("", "## 如何下单", "", `暂不支持在线下单，请致电 ${shop.phone} 联系店铺预约或购买。`, "");
+    return lines.join("\n");
+  }
   lines.push(
     "",
     "## 如何下单",
@@ -99,6 +104,9 @@ export function openshopJson(shop: PublicShop, urls: ShopUrls) {
     openshop: 1,
     shop: { id: shop.id, slug: shop.slug, name: shop.name },
     url: urls.shop,
+    // False on the free plan: the shop can be read but not ordered from; call `phone` instead.
+    acceptsOrders: shop.acceptsOrders,
+    phone: shop.phone,
     llms: `${urls.shop}/llms.txt`,
     mcp: { url: `${urls.server}/mcp`, transport: "streamable-http", shopArgument: shop.slug },
     api: `${urls.server}/api/s/${shop.slug}`,

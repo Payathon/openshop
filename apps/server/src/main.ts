@@ -3,7 +3,7 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { createApp } from "./app.ts";
-import { Billing } from "./billing.ts";
+import { Billing, DEMO_GRANT_DAYS } from "./billing.ts";
 import { connectFromEnv } from "./db/client.ts";
 import { startPaymentSync } from "./jobs.ts";
 import { FakePaymentProvider } from "./payments/fake.ts";
@@ -51,7 +51,7 @@ if (existsSync(webDist)) {
 // The demo accounts have published passwords, so they are only made outside production
 // unless SEED_ACCOUNTS=1 asks for them.
 const seedAccountsWanted = process.env.SEED_ACCOUNTS ? process.env.SEED_ACCOUNTS === "1" : process.env.NODE_ENV !== "production";
-if (process.env.SEED !== "0" && seedAccountsWanted && (await seedAccounts(app, baseUrl, { pay: payments instanceof FakePaymentProvider }))) {
+if (process.env.SEED !== "0" && seedAccountsWanted && (await seedAccounts(app, baseUrl, { pay: payments instanceof FakePaymentProvider, grant: (slug) => billing.grant(slug, DEMO_GRANT_DAYS) }))) {
   console.log(`seeded workbench accounts (${baseUrl}/admin):`);
   for (const a of [DEMO, FASHION, DINING]) console.log(`  finished shop: ${a.email} / ${a.password}  → ${baseUrl}/s/${a.slug}`);
   console.log(`  new merchant:  ${TRY.email} / ${TRY.password}`);

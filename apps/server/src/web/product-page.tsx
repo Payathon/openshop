@@ -1,6 +1,6 @@
 /** @jsxImportSource hono/jsx */
 import type { Theme } from "@openshop/core";
-import { Img, jsonForScript, Layout, PreviewBar, price, TitleBar, variantLabel, WEEKDAYS, type PublicProduct, type PublicShop } from "./layout.tsx";
+import { CallBar, Img, jsonForScript, Layout, PreviewBar, price, TitleBar, variantLabel, WEEKDAYS, type PublicProduct, type PublicShop } from "./layout.tsx";
 import type { ShopUrls } from "./discovery.ts";
 import { CHECKOUT_SCRIPT } from "./scripts.ts";
 
@@ -68,6 +68,19 @@ export function ProductPage(p: {
     </>
   );
 
+  const booking = product.fulfillment === "booking";
+  // The variants as plain text, where nothing can be picked.
+  const variantList =
+    product.variants.length > 1 ? (
+      <div class="pills">
+        {product.variants.map((v) => (
+          <span class="pill">
+            {variantLabel(v.attributes)} · {price(v.priceFen)}
+          </span>
+        ))}
+      </div>
+    ) : null;
+
   if (p.preview) {
     return (
       <Layout title={`预览：${product.name} - ${shop.name}`} theme={p.theme} head={<meta name="robots" content="noindex" />}>
@@ -78,23 +91,38 @@ export function ProductPage(p: {
           <div class="product-info">
             {info}
             <div class="checkout">
-              {product.variants.length > 1 ? (
-                <div class="pills">
-                  {product.variants.map((v) => (
-                    <span class="pill">
-                      {variantLabel(v.attributes)} · {price(v.priceFen)}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-              <p class="hint">预览里不能下单。发布后，顾客在这里选{product.fulfillment === "booking" ? "时间" : "规格和数量"}并付款。</p>
+              {variantList}
+              <p class="hint">
+                {shop.acceptsOrders
+                  ? `预览里不能下单。发布后，顾客在这里选${booking ? "时间" : "规格和数量"}并付款。`
+                  : "店铺现在是免费版，只能展示：顾客在这里看到的是店铺电话，不能在线下单。开通专业版后可以在线预约和收款。"}
+              </p>
             </div>
           </div>
         </div>
       </Layout>
     );
   }
-  const booking = product.fulfillment === "booking";
+
+  // On the free plan the page shows the product and the shop's phone instead of a checkout.
+  if (!shop.acceptsOrders) {
+    return (
+      <Layout title={`${product.name} - ${shop.name}`} description={product.description || `${shop.name} 的 ${product.name}`} theme={p.theme}>
+        <TitleBar shop={shop} home={urls.shop} back={urls.shop} />
+        <div class={layout}>
+          {media}
+          <div class="product-info">
+            {info}
+            <div class="checkout">
+              {variantList}
+              <p class="fine">暂不支持在线{booking ? "预约" : "下单"}，请打电话给店铺{booking ? "约时间" : "购买"}。</p>
+            </div>
+            <CallBar shop={shop} booking={booking} />
+          </div>
+        </div>
+      </Layout>
+    );
+  }
   const days = booking ? bookingDays(shop, p.now) : [];
   const single = product.variants.length === 1 && Object.keys(product.variants[0]!.attributes).length === 0;
   const variantName = single ? "" : Object.keys(product.variants[0]!.attributes).join(" / ") || "规格";

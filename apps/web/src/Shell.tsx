@@ -1,5 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { NavLink, useLocation } from "react-router";
+import { Link, NavLink, useLocation } from "react-router";
+import { get } from "./api.ts";
+import { daysLeft, fullDate, type Billing } from "./pages/Billing.tsx";
 import { useSession } from "./session.tsx";
 import { StudioProvider, useStudio } from "./studio.tsx";
 
@@ -83,6 +85,62 @@ function PublishBar() {
   );
 }
 
+// How long the shop can still take orders. A paying shop hears about it only in its last week;
+// the trial always shows, so nobody is surprised when it ends.
+const RENEW_NOTICE_DAYS = 7;
+
+function PlanBanner() {
+  const { pathname } = useLocation();
+  const onBilling = pathname === "/billing";
+  const [billing, setBilling] = useState<Billing | null>(null);
+  // The billing page shows all of this itself; read again on leaving it, in case they paid.
+  useEffect(() => {
+    if (!onBilling) get<Billing>("/api/merchant/billing").then(setBilling, () => setBilling(null));
+  }, [onBilling]);
+  if (onBilling || !billing) return null;
+
+  const action = (
+    <Link className="btn primary" to="/billing">
+      开通专业版
+    </Link>
+  );
+  if (billing.plan === "free") {
+    return (
+      <div className="banner critical plan-banner" role="alert">
+        <div className="body">
+          <h3>已到期：店铺目前只能展示，顾客无法下单</h3>
+          <p>顾客能看到商品和电话，但不能在线预约、下单，AI 助手也下不了单。开通专业版后马上恢复。</p>
+        </div>
+        {action}
+      </div>
+    );
+  }
+  const left = daysLeft(billing.proUntil!);
+  if (billing.source === "trial") {
+    return (
+      <div className="banner plan-banner" role="status">
+        <div className="body">
+          <h3>专业版试用中，还剩 {left} 天</h3>
+          <p>试用到 {fullDate(billing.proUntil!)}。之后店铺只能展示，顾客无法下单。现在开通，从试用结束那天开始算。</p>
+        </div>
+        {action}
+      </div>
+    );
+  }
+  if (left > RENEW_NOTICE_DAYS) return null;
+  return (
+    <div className="banner warning plan-banner" role="status">
+      <div className="body">
+        <h3>专业版 {fullDate(billing.proUntil!)} 到期，还剩 {left} 天</h3>
+        <p>到期后店铺只能展示，顾客无法下单。续费从原到期日往后顺延。</p>
+      </div>
+      <Link className="btn primary" to="/billing">
+        续费
+      </Link>
+    </div>
+  );
+}
+
 export function Shell(props: { children: ReactNode }) {
   return (
     <StudioProvider>
@@ -140,6 +198,7 @@ function Frame(props: { children: ReactNode }) {
       </nav>
       <main className="main">
         <PublishBar />
+        <PlanBanner />
         {props.children}
       </main>
     </div>
