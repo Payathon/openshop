@@ -81,9 +81,9 @@ export function llmsTxt(shop: PublicShop, products: PublicProduct[], urls: ShopU
     "- AI agent：用 OpenShop 命令行查询和下单，每条命令都输出 JSON 和下一步提示：",
     "",
     "  ```bash",
-    `  npx -y openshop shop ${urls.shop}          # 店铺信息和全部商品`,
-    `  npx -y openshop slots ${urls.shop} <variantId> --date YYYY-MM-DD`,
-    `  npx -y openshop order ${urls.shop} --input '<json>'   # 返回支付宝付款链接`,
+    `  npx -y openshop-cli shop ${urls.shop}          # 店铺信息和全部商品`,
+    `  npx -y openshop-cli slots ${urls.shop} <variantId> --date YYYY-MM-DD`,
+    `  npx -y openshop-cli order ${urls.shop} --input '<json>'   # 返回支付宝付款链接`,
     "  ```",
     "",
     `- MCP（Streamable HTTP，无需登录）：${urls.server}/mcp，工具里的 shop 参数填 ${shop.slug} 或本店链接。`,
@@ -102,6 +102,6 @@ export function openshopJson(shop: PublicShop, urls: ShopUrls) {
     llms: `${urls.shop}/llms.txt`,
     mcp: { url: `${urls.server}/mcp`, transport: "streamable-http", shopArgument: shop.slug },
     api: `${urls.server}/api/s/${shop.slug}`,
-    cli: `npx -y openshop shop ${urls.shop}`,
+    cli: `npx -y openshop-cli shop ${urls.shop}`,
   };
 }

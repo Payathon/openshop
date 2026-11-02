@@ -1,29 +1,35 @@
 {
-  "name": "@openshop/cli",
-  "version": "0.0.0",
-  "private": true,
+  "name": "openshop-cli",
+  "version": "0.1.0",
+  "description": "Book and buy from OpenShop stores from the command line or an AI agent (MCP), paying with Alipay.",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "openshop": "./dist/openshop.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
   },
   "scripts": {
     "openshop": "tsx src/bin.ts",
     "build": "node build.mjs",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@openshop/client": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.32.1",
-    "zod": "^4.6.7"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "node -e \"if(!process.env.OPENSHOP_DEFAULT_SERVER){console.error('Set OPENSHOP_DEFAULT_SERVER');process.exit(1)}\" && node build.mjs"
   },
   "devDependencies": {
-    "@openshop/server": "workspace:*",
     "@hono/node-server": "^2.1.5",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@openshop/client": "workspace:*",
+    "@openshop/server": "workspace:*",
     "@types/node": "^26.6.5",
     "esbuild": "^0.28.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.4"
+    "vitest": "^5.0.4",
+    "zod": "^4.6.7"
   }
 }

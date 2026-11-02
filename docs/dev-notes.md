@@ -80,8 +80,8 @@ MVP 阶段，实现细节和小的产品细节由开发时自行决定，记在�
 
 ## 发布前要改的
 
-- `llms.txt` 和 Skill 里的 `npx -y openshop` 用的是暂定的包名。定了 npm 包名以后两处一起改
-- CLI 的默认服务器地址在构建时指定：`OPENSHOP_DEFAULT_SERVER=https://<域名> pnpm --filter @openshop/cli build`。不指定时默认是 `http://localhost:8788`，所以发布到 npm 前一定要带上这个变量构建
+- **CLI 的 npm 包名是 `openshop-cli`**，命令名仍是 `openshop`（2026-11-02）。`openshop` 这个包名已经被别人的 Shopify 框架占了，之前 `llms.txt` 里的 `npx -y openshop` 会运行别人的代码。Skill 找不到 `openshop` 命令时改用 `npx -y openshop-cli`。依赖全部打进 bundle，所以都放在 devDependencies
+- CLI 的默认服务器地址在构建时指定：`OPENSHOP_DEFAULT_SERVER=https://<域名> pnpm --filter openshop-cli build`。不指定时默认是 `http://localhost:8788`，所以发布到 npm 前一定要带上这个变量构建
 
 ## 部署准备（2026-10-21）
 

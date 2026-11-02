@@ -53,7 +53,7 @@ pnpm typecheck
 - **CLI 加 Skill**（Claude Code 等桌面 agent 推荐用这个）：
 
   ```bash
-  pnpm --filter @openshop/cli build
+  pnpm --filter openshop-cli build
   ln -s "$PWD/packages/cli/dist/openshop.mjs" ~/.local/bin/openshop   # 放到 PATH 里的任意目录
   cp -r skill/openshop ~/.claude/skills/
   ```

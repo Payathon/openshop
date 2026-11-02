@@ -11,7 +11,7 @@ All commands print JSON. `<shop>` is the link the user gave you (e.g. `https://o
 
 ## Before anything
 
-Run `openshop --version`. If the command isn't found, tell the user OpenShop's CLI isn't installed yet and stop.
+Run `openshop --version`. If the command isn't found, use `npx -y openshop-cli` in its place for every command below (Node 22 or later). If `npx` isn't available either, tell the user to install Node.js and stop.
 
 ## Ordering
 

@@ -116,7 +116,7 @@ describe("shop pages", () => {
     expect(llms.type).toContain("text/plain");
     expect(llms.text).toContain("# 小美美甲");
     expect(llms.text).toContain("（预约，约 90 分钟）：¥168。下单时需要选择：颜色（裸粉、酒红）");
-    expect(llms.text).toContain(`npx -y openshop shop ${BASE}/s/nail-studio`);
+    expect(llms.text).toContain(`npx -y openshop-cli shop ${BASE}/s/nail-studio`);
     expect(llms.text).toContain(`${BASE}/mcp`);
 
     const wk = JSON.parse((await get(t, "/s/nail-studio/.well-known/openshop.json")).text);
