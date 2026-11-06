@@ -10,6 +10,7 @@ import { FakePaymentProvider } from "./payments/fake.ts";
 import { alipayFromEnv } from "./payments/env.ts";
 import { seedDemo } from "./seed.ts";
 import { DEMO, DINING, FASHION, seedAccounts, TRY } from "./seed-accounts.ts";
+import { Push, vapidFromEnv, WebPushSender } from "./push.ts";
 import { OpenShop } from "./shop.ts";
 import { LocalDiskStorage } from "./storage.ts";
 
@@ -21,7 +22,10 @@ const db = await connectFromEnv();
 const payments = alipayFromEnv("ALIPAY", baseUrl);
 const billingPayments = alipayFromEnv("PLATFORM_ALIPAY", baseUrl);
 console.log(`payments: ${payments.name}, billing: ${billingPayments.name}`);
-const shop = new OpenShop({ db, payments, baseUrl });
+// New-order notifications to merchants' browsers. Without VAPID_* keys, a pair for this run.
+const vapid = vapidFromEnv();
+const push = new Push({ db, sender: new WebPushSender(vapid), publicKey: vapid.publicKey });
+const shop = new OpenShop({ db, payments, baseUrl, notifier: push });
 const billing = new Billing({ db, payments: billingPayments, baseUrl });
 const storage = new LocalDiskStorage(process.env.UPLOADS_DIR ?? ".data/uploads", `${baseUrl}/files`);
 
@@ -35,7 +39,7 @@ const previewSecret = process.env.PREVIEW_SECRET;
 if (!previewSecret) console.warn("PREVIEW_SECRET is not set; preview links stop working when the server restarts");
 
 const jobs = startPaymentSync([shop, billing], Number(process.env.PAYMENT_SYNC_MS ?? 10_000));
-const app = createApp(shop, payments, { storage, previewSecret, billing });
+const app = createApp(shop, payments, { storage, previewSecret, billing, push });
 
 // The merchant workbench (apps/web) is served under /admin once built; `pnpm dev` in apps/web
 // serves it with hot reload instead and proxies everything else here.
@@ -70,6 +74,7 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
     forced.unref();
     server.close();
     await jobs.stop();
+    await push.idle();
     process.exit(0);
   });
 }

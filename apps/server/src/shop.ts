@@ -133,6 +133,12 @@ export type RenderedOrder = {
   paidAt: string | null;
 };
 
+// Told when an order becomes paid or confirmed, after the payment transaction commits (push.ts).
+// It must not throw or make the caller wait: telling the merchant is never part of the payment.
+export interface OrderNotifier {
+  orderPaid(orderId: string): void;
+}
+
 const toSchedule = (s: StoredSchedule): BookingSchedule => ({
   ...s,
   closures: s.closures.map((c) => ({ start: new Date(c.start), end: new Date(c.end) })),
@@ -143,12 +149,14 @@ export class OpenShop {
   readonly payments: PaymentProvider;
   private readonly clock: () => Date;
   readonly baseUrl: string;
+  private readonly notifier: OrderNotifier | undefined;
 
-  constructor(deps: { db: Db; payments: PaymentProvider; clock?: () => Date; baseUrl: string }) {
+  constructor(deps: { db: Db; payments: PaymentProvider; clock?: () => Date; baseUrl: string; notifier?: OrderNotifier }) {
     this.db = deps.db;
     this.payments = deps.payments;
     this.clock = deps.clock ?? (() => new Date());
     this.baseUrl = deps.baseUrl;
+    this.notifier = deps.notifier;
   }
 
   // ---- shops ------------------------------------------------------------
@@ -362,6 +370,7 @@ export class OpenShop {
       trackingNo: null,
       createdAt: now,
       paidAt: null,
+      notifiedAt: null,
     };
 
     await this.db.transaction(async (tx) => {
@@ -542,9 +551,11 @@ export class OpenShop {
 
   private async markPaid(order: OrderRow): Promise<OrderRow> {
     const now = this.clock();
-    return this.db.transaction(async (tx) => {
+    let paidNow = false;
+    const result = await this.db.transaction(async (tx) => {
       const [locked] = await tx.select().from(orders).where(eq(orders.id, order.id)).for("update");
       if (!locked || locked.status !== "pending_payment") return locked!;
+      paidNow = true;
       const [paid] = await tx
         .update(orders)
         .set({ status: statusAfterPayment(locked.fulfillment), paidAt: now })
@@ -573,6 +584,10 @@ export class OpenShop {
         });
       return paid!;
     });
+    // Committed: tell the merchant. Whoever else confirms the same payment finds it paid above
+    // and stays quiet; push.ts also claims each order once in the database.
+    if (paidNow) this.notifier?.orderPaid(order.id);
+    return result;
   }
 
   // Ends an order and returns any stock it was holding. Booked slots free themselves

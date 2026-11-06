@@ -14,13 +14,15 @@ import { AlipayPagePayProvider } from "./payments/alipay.ts";
 import { FakePaymentProvider } from "./payments/fake.ts";
 import type { PaymentProvider } from "./payments/provider.ts";
 import { loginSchema, newOrderSchema, newShopSchema, onboardSchema, registerSchema, scheduleSchema } from "./schemas.ts";
+import type { Push } from "./push.ts";
 import { OpenShop, ShopError } from "./shop.ts";
 import { LocalDiskStorage, MAX_IMAGE_BYTES, newImageKey, sniffImage, type Storage } from "./storage.ts";
 import { Studio } from "./studio.ts";
 import { DEMO_SHOPS, HomePage, type DemoShop } from "./web/home.tsx";
 import { shopSite } from "./web/site.tsx";
 
-type Env = { Variables: { shopId: string } };
+// accountId: the workbench account behind the request; null when a merchant token is used.
+type Env = { Variables: { shopId: string; accountId: string | null } };
 
 async function body<T extends z.ZodType>(c: Context, schema: T): Promise<z.infer<T>> {
   const json = await c.req.json().catch(() => {
@@ -35,10 +37,11 @@ const orderStatuses = ["pending_payment", "confirmed", "paid", "shipped", "compl
 
 // previewSecret signs merchants' preview links; set it (PREVIEW_SECRET) so links survive restarts.
 // billing is the platform's own 专业版 billing, on its own provider; without it, a fake cashier.
+// push sends new-order notifications to merchants' browsers; without it, no push routes.
 export function createApp(
   shop: OpenShop,
   payments: PaymentProvider,
-  opts: { storage?: Storage; previewSecret?: string | undefined; billing?: Billing } = {},
+  opts: { storage?: Storage; previewSecret?: string | undefined; billing?: Billing; push?: Push } = {},
 ) {
   const app = new Hono<Env>();
   const { storage } = opts;
@@ -178,12 +181,15 @@ export function createApp(
   app.use("/api/merchant/*", async (c, next) => {
     const token = c.req.header("authorization")?.replace(/^Bearer\s+/i, "");
     let shopId = token ? await shop.authenticate(token) : null;
+    let accountId: string | null = null;
     if (!shopId && !token) {
       const account = await sessionAccount(c);
       shopId = account ? ((await accounts.shopsOf(account.id))[0]?.id ?? null) : null;
+      accountId = account?.id ?? null;
     }
     if (!shopId) throw new ShopError(401, "unauthorized", "请先登录");
     c.set("shopId", shopId);
+    c.set("accountId", accountId);
     await next();
   });
 
@@ -252,6 +258,27 @@ export function createApp(
   // 专业版: paid to OpenShop itself, through the platform's own provider (billing.ts).
   app.get("/api/merchant/billing", async (c) => c.json(await billing.overview(c.get("shopId"))));
   app.post("/api/merchant/billing/checkout", async (c) => c.json(await billing.checkout(c.get("shopId")), 201));
+
+  // New-order notifications in this browser (push.ts). The workbench subscribes with the
+  // public key, then registers what the browser returns.
+  const { push } = opts;
+  if (push) {
+    const pushTarget = z.object({
+      endpoint: z.string().max(2000),
+      keys: z.object({ p256dh: z.string().min(1).max(200), auth: z.string().min(1).max(100) }),
+    });
+    app.get("/api/merchant/push", (c) => c.json({ publicKey: push.publicKey }));
+    app.post("/api/merchant/push/subscriptions", async (c) => {
+      await push.subscribe(c.get("shopId"), c.get("accountId"), await body(c, pushTarget));
+      return c.json({ ok: true }, 201);
+    });
+    app.post("/api/merchant/push/unsubscribe", async (c) => {
+      const { endpoint } = await body(c, z.object({ endpoint: z.string().max(2000) }));
+      await push.unsubscribe(c.get("shopId"), endpoint);
+      return c.json({ ok: true });
+    });
+    app.post("/api/merchant/push/test", async (c) => c.json({ sent: await push.test(c.get("shopId")) }));
+  }
 
   // ---- uploads ------------------------------------------------------------
   // The raw image is the request body (curl --data-binary @a.jpg -H 'content-type: image/jpeg'),

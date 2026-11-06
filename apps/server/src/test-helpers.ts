@@ -6,6 +6,7 @@ import { Billing } from "./billing.ts";
 import { connectPglite } from "./db/client.ts";
 import { FakePaymentProvider } from "./payments/fake.ts";
 import type { PaymentProvider } from "./payments/provider.ts";
+import { Push, type PushSender, type PushTarget } from "./push.ts";
 import { OpenShop } from "./shop.ts";
 import { LocalDiskStorage } from "./storage.ts";
 
@@ -21,17 +22,34 @@ export const nailSchedule = {
   closures: [],
 };
 
+// Records what would go to browsers. Endpoints in `gone` answer like a push service whose
+// subscription has expired; in `failing`, like one that is down.
+export class FakePushSender implements PushSender {
+  readonly sent: { endpoint: string; message: { title: string; body: string; url: string; tag: string } }[] = [];
+  readonly gone = new Set<string>();
+  readonly failing = new Set<string>();
+
+  async send(target: PushTarget, payload: string) {
+    if (this.failing.has(target.endpoint)) throw new Error("push service unavailable");
+    if (this.gone.has(target.endpoint)) return "gone" as const;
+    this.sent.push({ endpoint: target.endpoint, message: JSON.parse(payload) });
+    return "sent" as const;
+  }
+}
+
 // Uses the fake cashier unless a provider is passed.
 export async function setup<P extends PaymentProvider = FakePaymentProvider>(provider?: P) {
   let now = START;
   const payments = provider ?? (new FakePaymentProvider(BASE) as unknown as P);
   const db = await connectPglite();
-  const shop = new OpenShop({ db, payments, clock: () => now, baseUrl: BASE });
+  const pushSender = new FakePushSender();
+  const push = new Push({ db, sender: pushSender, publicKey: "test-vapid-public-key", clock: () => now });
+  const shop = new OpenShop({ db, payments, clock: () => now, baseUrl: BASE, notifier: push });
   // 专业版 billing always uses its own fake cashier here, apart from the shop's provider.
   const billingPayments = new FakePaymentProvider(BASE);
   const billing = new Billing({ db, payments: billingPayments, clock: () => now, baseUrl: BASE });
   const storage = new LocalDiskStorage(await mkdtemp(join(tmpdir(), "openshop-uploads-")), `${BASE}/files`);
-  const app = createApp(shop, payments, { storage, billing });
+  const app = createApp(shop, payments, { storage, billing, push });
 
   async function call(method: string, path: string, opts: { token?: string; orderToken?: string; body?: unknown } = {}) {
     const res = await app.request(`${BASE}${path}`, {
@@ -118,6 +136,8 @@ export async function setup<P extends PaymentProvider = FakePaymentProvider>(pro
     payments,
     billing,
     billingPayments,
+    push,
+    pushSender,
     call,
     ok,
     nailStudio,
