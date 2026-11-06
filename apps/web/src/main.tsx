@@ -12,6 +12,7 @@ import { OrderDetail, Orders } from "./pages/Orders.tsx";
 import { ProductEdit, Products } from "./pages/Products.tsx";
 import { Schedule } from "./pages/Schedule.tsx";
 import { Settings } from "./pages/Settings.tsx";
+import { refreshPush, registerServiceWorker, turnOffPush } from "./push.tsx";
 import { SessionContext, type Me } from "./session.tsx";
 import { Shell } from "./Shell.tsx";
 import { ToastHost } from "./ui.tsx";
@@ -33,7 +34,14 @@ function App() {
   }, []);
   useEffect(() => void refresh(), [refresh]);
 
+  const signedIn = state.kind === "signed-in" && !!state.me.shop;
+  useEffect(() => {
+    if (signedIn) void refreshPush();
+  }, [signedIn]);
+
   const logout = useCallback(async () => {
+    // A shared device shouldn't keep getting this shop's orders.
+    await turnOffPush();
     await post("/api/auth/logout").catch(() => {});
     setState({ kind: "signed-out" });
     navigate("/login", { replace: true });
@@ -87,6 +95,8 @@ function App() {
     </SessionContext.Provider>
   );
 }
+
+registerServiceWorker();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

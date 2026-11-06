@@ -588,6 +588,23 @@ p {
   }
 }
 
+/* Turning on new-order push, above the order list (push.tsx). */
+.push-prompt {
+  align-items: center;
+  margin-bottom: 16px;
+}
+.push-prompt p {
+  margin: 0;
+}
+@media (max-width: 760px) {
+  .push-prompt {
+    flex-wrap: wrap;
+  }
+  .push-prompt .body {
+    flex-basis: 100%;
+  }
+}
+
 /* ---- tables & lists ---------------------------------------------------- */
 
 .table {

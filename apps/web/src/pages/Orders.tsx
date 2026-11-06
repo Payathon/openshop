@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { get, message, post } from "../api.ts";
+import { PushPrompt } from "../push.tsx";
 import { Badge, Banner, Card, Empty, Field, Page, dateTime, timeOnly, useToast, yuan } from "../ui.tsx";
 
 export type OrderStatus = "pending_payment" | "confirmed" | "paid" | "shipped" | "completed" | "cancelled" | "expired";
@@ -63,6 +64,7 @@ export function Orders() {
 
   return (
     <Page title="订单">
+      <PushPrompt />
       {error && <Banner tone="critical">{error}</Banner>}
       <Card flush>
         <div className="card-header">

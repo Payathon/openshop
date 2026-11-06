@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { get, message, post } from "../api.ts";
+import { PushCard } from "../push.tsx";
 import { useSession } from "../session.tsx";
 import { useStudio } from "../studio.tsx";
 import { Badge, Card, Empty, Field, Page, dateTime, useToast } from "../ui.tsx";
@@ -148,6 +149,7 @@ export function Settings() {
             <div className="link-box">{shop.url}</div>
             <p className="subtle">店铺地址开店时生成，暂时不能修改。</p>
           </Card>
+          <PushCard />
           <Card title="套餐">
             <p className="subtle">免费版只做展示。专业版 ¥29/月，含在线下单、支付宝收款、顾客的 AI 助手下单、自定义域名和网站托管与维护。</p>
             <div>
