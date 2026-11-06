@@ -22,7 +22,10 @@ export function AgentCard() {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const list = useRef<HTMLDivElement>(null);
-  useEffect(() => list.current?.scrollTo({ top: list.current.scrollHeight }), [turns, busy]);
+  // Braces matter: newer browsers return a promise from scrollTo, which React would take for a cleanup.
+  useEffect(() => {
+    list.current?.scrollTo({ top: list.current.scrollHeight });
+  }, [turns, busy]);
 
   const pending = new Set(overview?.changes.map((c) => c.id));
 
