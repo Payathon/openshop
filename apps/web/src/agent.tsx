@@ -11,6 +11,9 @@ interface Turn {
   role: "user" | "assistant";
   content: string;
   changes?: Change[];
+  // The published version when the reply came. A change that is no longer pending was
+  // published if the version has moved on since, and undone otherwise.
+  version?: number;
   failed?: boolean;
 }
 
@@ -40,8 +43,10 @@ export function AgentCard() {
       // Failed replies are only shown, never sent back as part of the conversation.
       const messages = next.filter((t) => !t.failed).map(({ role, content }) => ({ role, content }));
       const r = await post<{ reply: string; changes: Change[] }>("/api/merchant/agent/chat", { messages });
-      setTurns((t) => [...t, { role: "assistant", content: r.reply, changes: r.changes }]);
+      // Refresh first, so the new changes are already pending when they show up; otherwise they
+      // would flash as undone.
       if (r.changes.length) await refresh();
+      setTurns((t) => [...t, { role: "assistant", content: r.reply, changes: r.changes, version: overview?.version ?? 0 }]);
     } catch (e) {
       setTurns((t) => [...t, { role: "assistant", content: message(e), failed: true }]);
     } finally {
@@ -67,18 +72,21 @@ export function AgentCard() {
             <div className="agent-bubble">{t.content}</div>
             {!!t.changes?.length && (
               <ul className="agent-changes">
-                {t.changes.map((c) => (
-                  <li key={c.id} className={pending.has(c.id) ? "" : "undone"}>
-                    <span>{c.summary}</span>
-                    {pending.has(c.id) ? (
-                      <button className="btn plain" onClick={() => void undo(c.id)}>
-                        撤销
-                      </button>
-                    ) : (
-                      <span className="subtle">已撤销或已发布</span>
-                    )}
-                  </li>
-                ))}
+                {t.changes.map((c) => {
+                  const state = pending.has(c.id) ? "pending" : (overview?.version ?? 0) > (t.version ?? 0) ? "published" : "undone";
+                  return (
+                    <li key={c.id} className={state === "undone" ? "undone" : ""}>
+                      <span>{c.summary}</span>
+                      {state === "pending" ? (
+                        <button className="btn plain" onClick={() => void undo(c.id)}>
+                          撤销
+                        </button>
+                      ) : (
+                        <span className="subtle">{state === "published" ? "已发布" : "已撤销"}</span>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
