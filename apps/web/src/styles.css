@@ -1232,3 +1232,66 @@ p {
     display: inline-flex !important;
   }
 }
+
+/* AI assistant on 店铺装修 */
+.agent-log {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+.agent-example {
+  align-self: flex-start;
+  text-align: left;
+}
+.agent-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 88%;
+}
+.agent-msg.user {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+.agent-bubble {
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.agent-msg.user .agent-bubble {
+  background: var(--accent-soft);
+}
+.agent-msg.failed .agent-bubble {
+  background: var(--critical-soft);
+  color: var(--critical);
+}
+.agent-changes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.agent-changes li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 10px;
+}
+.agent-changes li + li {
+  border-top: 1px solid var(--border);
+}
+.agent-changes li.undone > span:first-child {
+  color: var(--text-subtle);
+  text-decoration: line-through;
+}
+.agent-input {
+  flex: 1;
+  min-height: 0;
+  resize: none;
+}

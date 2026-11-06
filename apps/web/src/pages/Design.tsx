@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { AgentCard } from "../agent.tsx";
 import { message, request } from "../api.ts";
 import { useStudio, type Product, type Section, type Theme } from "../studio.tsx";
 import { TemplatePicker, templatePatch } from "../templates.tsx";
@@ -402,6 +403,7 @@ export function Design() {
     >
       <div className="design">
         <div className="col">
+          <AgentCard />
           <TemplateCard theme={overview.page.theme} />
           <ThemeCard theme={overview.page.theme} />
           <SectionsCard sections={overview.page.sections} products={overview.products} />
