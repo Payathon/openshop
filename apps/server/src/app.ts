@@ -7,7 +7,7 @@ import { MODULES, productInputSchema, STYLES, TEMPLATES, type OrderStatus } from
 import { bodyLimit } from "hono/body-limit";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { html } from "hono/html";
-import type Anthropic from "@anthropic-ai/sdk";
+import type OpenAI from "openai";
 import { Accounts, SESSION_TTL_MS } from "./accounts.ts";
 import { chatSchema, MerchantAgent } from "./agent.ts";
 import { Billing, BILLING_ID_PREFIX } from "./billing.ts";
@@ -40,11 +40,11 @@ const orderStatuses = ["pending_payment", "confirmed", "paid", "shipped", "compl
 // previewSecret signs merchants' preview links; set it (PREVIEW_SECRET) so links survive restarts.
 // billing is the platform's own 专业版 billing, on its own provider; without it, a fake cashier.
 // push sends new-order notifications to merchants' browsers; without it, no push routes.
-// agent is the Claude client behind the workbench's AI assistant; without it, the chat says so.
+// agent is the model client behind the workbench's AI assistant; without it, the chat says so.
 export function createApp(
   shop: OpenShop,
   payments: PaymentProvider,
-  opts: { storage?: Storage; previewSecret?: string | undefined; billing?: Billing; push?: Push; agent?: { client: Anthropic; model: string } | undefined } = {},
+  opts: { storage?: Storage; previewSecret?: string | undefined; billing?: Billing; push?: Push; agent?: { client: OpenAI; model: string } | undefined } = {},
 ) {
   const app = new Hono<Env>();
   const { storage } = opts;
