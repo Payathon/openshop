@@ -38,7 +38,7 @@ export class FakePushSender implements PushSender {
 }
 
 // Uses the fake cashier unless a provider is passed.
-export async function setup<P extends PaymentProvider = FakePaymentProvider>(provider?: P) {
+export async function setup<P extends PaymentProvider = FakePaymentProvider>(provider?: P, opts: { agent?: NonNullable<Parameters<typeof createApp>[2]>["agent"] } = {}) {
   let now = START;
   const payments = provider ?? (new FakePaymentProvider(BASE) as unknown as P);
   const db = await connectPglite();
@@ -49,7 +49,7 @@ export async function setup<P extends PaymentProvider = FakePaymentProvider>(pro
   const billingPayments = new FakePaymentProvider(BASE);
   const billing = new Billing({ db, payments: billingPayments, clock: () => now, baseUrl: BASE });
   const storage = new LocalDiskStorage(await mkdtemp(join(tmpdir(), "openshop-uploads-")), `${BASE}/files`);
-  const app = createApp(shop, payments, { storage, billing, push });
+  const app = createApp(shop, payments, { storage, billing, push, agent: opts.agent });
 
   async function call(method: string, path: string, opts: { token?: string; orderToken?: string; body?: unknown } = {}) {
     const res = await app.request(`${BASE}${path}`, {

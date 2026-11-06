@@ -1,3 +1,4 @@
+import Anthropic from "@anthropic-ai/sdk";
 import { existsSync } from "node:fs";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
@@ -39,7 +40,11 @@ const previewSecret = process.env.PREVIEW_SECRET;
 if (!previewSecret) console.warn("PREVIEW_SECRET is not set; preview links stop working when the server restarts");
 
 const jobs = startPaymentSync([shop, billing], Number(process.env.PAYMENT_SYNC_MS ?? 10_000));
-const app = createApp(shop, payments, { storage, previewSecret, billing, push });
+// The workbench's AI assistant calls Claude from here (product-decisions #13).
+const agent = process.env.ANTHROPIC_API_KEY ? { client: new Anthropic(), model: process.env.AGENT_MODEL ?? "claude-opus-5-5" } : undefined;
+if (!agent) console.warn("ANTHROPIC_API_KEY is not set; the workbench's AI assistant is off");
+
+const app = createApp(shop, payments, { storage, previewSecret, billing, push, agent });
 
 // The merchant workbench (apps/web) is served under /admin once built; `pnpm dev` in apps/web
 // serves it with hot reload instead and proxies everything else here.

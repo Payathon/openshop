@@ -7,7 +7,9 @@ import { MODULES, productInputSchema, STYLES, TEMPLATES, type OrderStatus } from
 import { bodyLimit } from "hono/body-limit";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { html } from "hono/html";
+import type Anthropic from "@anthropic-ai/sdk";
 import { Accounts, SESSION_TTL_MS } from "./accounts.ts";
+import { chatSchema, MerchantAgent } from "./agent.ts";
 import { Billing, BILLING_ID_PREFIX } from "./billing.ts";
 import { opInputSchema, type OpInput } from "./content.ts";
 import { AlipayPagePayProvider } from "./payments/alipay.ts";
@@ -38,16 +40,18 @@ const orderStatuses = ["pending_payment", "confirmed", "paid", "shipped", "compl
 // previewSecret signs merchants' preview links; set it (PREVIEW_SECRET) so links survive restarts.
 // billing is the platform's own 专业版 billing, on its own provider; without it, a fake cashier.
 // push sends new-order notifications to merchants' browsers; without it, no push routes.
+// agent is the Claude client behind the workbench's AI assistant; without it, the chat says so.
 export function createApp(
   shop: OpenShop,
   payments: PaymentProvider,
-  opts: { storage?: Storage; previewSecret?: string | undefined; billing?: Billing; push?: Push } = {},
+  opts: { storage?: Storage; previewSecret?: string | undefined; billing?: Billing; push?: Push; agent?: { client: Anthropic; model: string } | undefined } = {},
 ) {
   const app = new Hono<Env>();
   const { storage } = opts;
   const billing = opts.billing ?? new Billing({ db: shop.db, payments: new FakePaymentProvider(shop.baseUrl), clock: () => shop.now(), baseUrl: shop.baseUrl });
   const studio = new Studio(shop, opts);
   const accounts = new Accounts(shop.db, () => shop.now());
+  const agent = opts.agent && new MerchantAgent(studio, opts.agent.client, opts.agent.model);
 
   // The workbench's login: an HttpOnly session cookie for the whole origin.
   const SESSION_COOKIE = "os_session";
@@ -212,6 +216,17 @@ export function createApp(
     const version = Number(c.req.param("version"));
     if (!Number.isInteger(version) || version < 1) throw new ShopError(400, "invalid_request", "版本号不正确");
     return c.json(await studio.rollback(c.get("shopId"), version));
+  });
+
+  // The AI assistant: edits it makes are ordinary pending changes (product-decisions #15).
+  app.post("/api/merchant/agent/chat", async (c) => {
+    if (!agent) throw new ShopError(503, "agent_unavailable", "AI 助手还没有配置，请先在页面上手动修改");
+    const { messages } = await body(c, chatSchema);
+    const turn = await agent.chat(c.get("shopId"), messages).catch((err: unknown) => {
+      console.error("agent:", err);
+      throw new ShopError(502, "agent_failed", "AI 助手暂时出错了，请稍后再试");
+    });
+    return c.json(turn);
   });
 
   const productEdit = async (c: Context<Env>, input: OpInput) => {

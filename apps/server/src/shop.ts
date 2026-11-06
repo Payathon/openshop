@@ -35,7 +35,7 @@ export async function providerCall<T>(fn: () => Promise<T>): Promise<T> {
 
 export class ShopError extends Error {
   constructor(
-    readonly status: 400 | 401 | 403 | 404 | 409 | 413 | 415 | 502,
+    readonly status: 400 | 401 | 403 | 404 | 409 | 413 | 415 | 502 | 503,
     readonly code: string,
     message: string,
   ) {
