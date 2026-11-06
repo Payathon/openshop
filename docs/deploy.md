@@ -50,6 +50,7 @@ app 负责 API、`/mcp` 和店铺网页，Postgres 存数据，另有一个服�
 | DNS | `@` 的 A 记录指向服务器 IP。以后做店铺子域名时，再加一条 `*` 的 A 记录 | 域名服务商的解析设置 |
 | 数据库密码 | `openssl rand -hex 24` 生成 | `.env` 的 `POSTGRES_PASSWORD` |
 | 预览签名密钥 | `openssl rand -hex 32` 生成；不填的话每次重启预览链接就失效 | `.env` 的 `PREVIEW_SECRET` |
+| 新订单推送密钥 | 在自己电脑上跑一次 `npx web-push generate-vapid-keys`，得到一对公钥和私钥，`VAPID_SUBJECT` 填一个联系邮箱（`mailto:…`）。**定下来就别换**：换了以后，所有已经开启提醒的手机和电脑都收不到推送，直到商家再打开一次后台（后台会自动重新订阅）。不填的话每次重启都换一对，效果一样 | `.env` 的 `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT` |
 | 支付宝收款（可选） | 开放平台应用的 APPID、应用私钥（PKCS#1）、支付宝公钥，都填不带 PEM 头尾的原始字符串。付款通知地址（`https://<域名>/payments/alipay/notify`）随每笔下单请求发给支付宝，不用在开放平台配置。不填就用模拟收银台。这是**顾客付给店铺**的货款 | `.env` 的 `ALIPAY_*` |
 | 平台收款（可选） | 另一个开放平台应用，收商家买专业版的钱，进 OpenShop 自己的账户。和上面一样填 APPID、应用私钥、支付宝公钥，生产环境把网关设为 `https://openapi.alipay.com/gateway.do`。付款通知地址是 `https://<域名>/payments/platform-alipay/notify`。**不能和店铺收款用同一个账户**，否则顾客的钱进了平台账户，就是二清。不填就用模拟收银台 | `.env` 的 `PLATFORM_ALIPAY_*` |
 
@@ -62,7 +63,7 @@ app 负责 API、`/mcp` 和店铺网页，Postgres 存数据，另有一个服�
 ```bash
 ssh root@<服务器 IP>
 mkdir -p /opt/openshop && cd /opt/openshop
-# 照 deploy/.env.example 写 .env：COMPOSE_FILE、OPENSHOP_DOMAIN、POSTGRES_PASSWORD、PREVIEW_SECRET
+# 照 deploy/.env.example 写 .env：COMPOSE_FILE、OPENSHOP_DOMAIN、POSTGRES_PASSWORD、PREVIEW_SECRET、VAPID_*
 vi .env
 ```
 
@@ -140,6 +141,15 @@ docker compose exec app node --import tsx src/billing-grant.ts xiangkou 365
 ```
 
 之后新建的演示店（全新的数据库）自带 365 天赠送，不用再跑。
+
+## 新订单推送
+
+顾客付款后，开启了提醒的商家手机和电脑会弹出通知（`apps/server/src/push.ts`）。**部署这一版之前（2026-11-05）**，在服务器的 `/opt/openshop/.env` 里加上 `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT`（见上面“要准备的东西”），否则每次重启都换密钥。没填时日志里有一行 `VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY are not set`。
+
+- 推送要 HTTPS（本地的 `localhost` 例外），服务器要能访问外网的推送服务（Chrome 走 `fcm.googleapis.com`，Safari 走 `*.push.apple.com`，Firefox 走 `*.push.services.mozilla.com`）。新加坡的服务器没问题。**国内的安卓手机大多没有谷歌服务，Chrome 收不到推送**，这是浏览器推送本身的限制
+- iPhone 要 iOS 16.4 以上，并且先在 Safari 里把后台“添加到主屏幕”，从主屏幕打开才能开启
+- 自己试：后台“设置 → 新订单提醒”开启，点“发一条测试提醒”
+- 发送失败只写日志（`push: …`），不影响订单；推送服务说订阅已失效（404/410）的会自动删除
 
 ## 备份
 
