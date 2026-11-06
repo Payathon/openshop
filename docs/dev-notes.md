@@ -236,11 +236,13 @@ MVP 阶段，实现细节和小的产品细节由开发时自行决定，记在�
 
 - **在哪里**：“店铺装修”页左栏最上面一张“AI 助手”卡片，右边就是手机预览。助手改完一轮，页面重新读一次店铺，预览跟着刷新
 - **改动就是待发布修改**：工具只有三个，`get_shop`（读 `studio.overview`，含区块 id 和商品）、`propose_change`（参数就是 `/api/merchant/changes` 收的那个 op，同一个 zod schema 转成 JSON Schema）、`undo_change`。所以助手做的修改和手动改的一样：进清单、能单条撤销、发布才上线。每条回复下面列出这一轮的修改，带“撤销”按钮
-- **改错了交还给模型**：op 校验失败或 `ShopError`（找不到区块、示例商品等）作为 `is_error` 的工具结果返回，让 Claude 自己改正；其他异常整轮失败，接口返回 502“AI 助手暂时出错了”
+- **改错了交还给模型**：op 校验失败、参数不是 JSON、`ShopError`（找不到区块、示例商品等）都作为工具结果返回，让模型自己改正；其他异常整轮失败，接口返回 502“AI 助手暂时出错了”
 - **不存对话**：`agent_threads`、`agent_messages` 表先不建。浏览器每轮把纯文字的对话历史发过来（最多 40 条），离开页面就重新开始。工具调用的过程不回传，下一轮模型重新 `get_shop`，反正店铺内容随时会被手动改
 - **一轮最多 8 次调用模型**，超过就停下，让商家看预览再说
-- **模型**：默认 `claude-opus-5-5`，`AGENT_MODEL` 可改；effort 用 `low`，对话改站要快，改配置不需要深想。开了服务端 fallback（`server-side-fallback-2026-07-01`，`fallbacks: "default"`），被安全分类器误拒时自动换模型重试；最终还是拒绝的，回复“这个请求我没法处理”
+- **模型用 DeepSeek，不用 Claude**（2026-11-05 改）：走它的 OpenAI 格式接口（`openai` SDK，`baseURL` 是 `https://api.deepseek.com`），密钥 `DEEPSEEK_API_KEY`。默认 `deepseek-flash`（V4.1 Flash），`AGENT_MODEL` 可以换成 `deepseek-v4-pro`。思考模式关掉：改配置不需要深想，也省掉多轮里回传 `reasoning_content` 的麻烦。产品决策 #13 写的“服务端调用 Claude API”跟着改了
+- **实测**（演示店，deepseek-flash）：“主色换成酒红色，字体用宋体”“首页最上面加横幅”“加一段关于我们”“法式美甲改成 ¥188”四句，每句 3.5～3.8 秒，改动都对；改价格时下单选项和时长原样保留，没有丢字段。“最上面”落在店铺信息下面，因为店铺信息必须在第一个
+- **工具结果都是文字**：OpenAI 格式没有 `is_error`，失败的结果以“错误：”开头，模型照着改
 - **不流式**：一次请求等整轮结束再返回，前端显示“正在修改…”。真实延迟如果难受再改成流式
 - **区块 props 写进系统提示**：每种区块的 props 从 `@openshop/core` 的 `SECTIONS` 自动生成，加区块类型时不用改提示词。`section.update` 是合并，只传要改的字段
-- **没配 `ANTHROPIC_API_KEY` 时**：接口返回 503 `agent_unavailable`，卡片里显示“AI 助手还没有配置”，其余功能照常
+- **没配 `DEEPSEEK_API_KEY` 时**：接口返回 503 `agent_unavailable`，卡片里显示“AI 助手还没有配置”，其余功能照常
 - **助手只改内容**：订单、库存、休息时间、收款不给工具，问到就让商家去对应页面

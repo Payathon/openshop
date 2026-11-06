@@ -11,7 +11,7 @@
 - 前端：React 加 Vite
 - MCP：`@modelcontextprotocol/sdk`
 - 支付：`alipay-sdk`，外加一个本地用的假支付实现
-- 商家 agent：Claude API，包括视觉识别。具体模型在实现时确认
+- 商家 agent：DeepSeek 的 OpenAI 格式接口（2026-11-05 从 Claude 改过来，见 dev-notes「对话改站」）。拍照导入的视觉识别以后再定
 - 校验：zod，前后端和 MCP 共用同一套 schema
 
 ## 目录结构
@@ -114,7 +114,7 @@ Skill 负责教 agent 的流程：问清楚该问的 → 展示订单摘要并�
 
 ## 商家 agent
 
-服务端调用 Claude API，给模型一组工具，所有工具都只改数据：
+服务端调用模型 API（第一版是 DeepSeek），给模型一组工具，所有工具都只改数据：
 
 - `update_shop`、`update_theme`、`add_section` / `update_section` / `move_section` / `remove_section`
 - `upsert_product`、`delete_product`、`set_availability`
@@ -243,7 +243,7 @@ Shopify 的做法是商品修改立即生效，只有主题可以草稿预览。
 
 比赛要求评审期间作品已部署、可正常访问，支付宝的异步通知也需要公网地址，所以 12 月 9 日前至少要部署一套：
 
-- **机房选新加坡或东京，不选香港**。商家 agent 要从服务端调用 Claude API，而 Anthropic 不支持在香港和中国大陆使用 API，放在香港会直接调不通。新加坡和东京都在支持范围内，到大陆的延迟也还可以接受
+- **机房选新加坡或东京，不选香港**（当初按 Claude API 的地区限制定的；商家 agent 改用 DeepSeek 后这条限制不再适用，但机房已经定了，不动）。商家 agent 要从服务端调用 Claude API，而 Anthropic 不支持在香港和中国大陆使用 API，放在香港会直接调不通。新加坡和东京都在支持范围内，到大陆的延迟也还可以接受
 - 一台云服务器（比如阿里云国际站或腾讯云的新加坡节点），上面运行：Caddy（负责 HTTPS 和泛域名证书），一个 Node 服务（API、MCP、店铺渲染、商家工作台），Postgres
 - 一个普通的 `.com` 等域名，不需要备案，配置泛解析 `*.openshop.xx`
 - 暂时不需要 CDN，等流量上来再加

@@ -51,11 +51,11 @@ app 负责 API、`/mcp` 和店铺网页，Postgres 存数据，另有一个服�
 | 数据库密码 | `openssl rand -hex 24` 生成 | `.env` 的 `POSTGRES_PASSWORD` |
 | 预览签名密钥 | `openssl rand -hex 32` 生成；不填的话每次重启预览链接就失效 | `.env` 的 `PREVIEW_SECRET` |
 | 新订单推送密钥 | 在自己电脑上跑一次 `npx web-push generate-vapid-keys`，得到一对公钥和私钥，`VAPID_SUBJECT` 填一个联系邮箱（`mailto:…`）。**定下来就别换**：换了以后，所有已经开启提醒的手机和电脑都收不到推送，直到商家再打开一次后台（后台会自动重新订阅）。不填的话每次重启都换一对，效果一样 | `.env` 的 `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT` |
-| Claude API 密钥 | 工作台“店铺装修”里的 AI 助手用。在 Anthropic Console 创建；不填的话助手关闭，页面上会提示“还没有配置”。`AGENT_MODEL` 可以不填，默认 `claude-opus-5-5` | `.env` 的 `ANTHROPIC_API_KEY`、`AGENT_MODEL` |
+| DeepSeek API 密钥 | 工作台“店铺装修”里的 AI 助手用。在 platform.deepseek.com 的 API keys 页面创建；不填的话助手关闭，页面上会提示“还没有配置”。`AGENT_MODEL` 可以不填，默认 `deepseek-flash` | `.env` 的 `DEEPSEEK_API_KEY`、`AGENT_MODEL` |
 | 支付宝收款（可选） | 开放平台应用的 APPID、应用私钥（PKCS#1）、支付宝公钥，都填不带 PEM 头尾的原始字符串。付款通知地址（`https://<域名>/payments/alipay/notify`）随每笔下单请求发给支付宝，不用在开放平台配置。不填就用模拟收银台。这是**顾客付给店铺**的货款 | `.env` 的 `ALIPAY_*` |
 | 平台收款（可选） | 另一个开放平台应用，收商家买专业版的钱，进 OpenShop 自己的账户。和上面一样填 APPID、应用私钥、支付宝公钥，生产环境把网关设为 `https://openapi.alipay.com/gateway.do`。付款通知地址是 `https://<域名>/payments/platform-alipay/notify`。**不能和店铺收款用同一个账户**，否则顾客的钱进了平台账户，就是二清。不填就用模拟收银台 | `.env` 的 `PLATFORM_ALIPAY_*` |
 
-服务端不调 Claude API，不需要 Anthropic 的 key。
+服务端不调 Claude API，不需要 Anthropic 的 key。商家 AI 助手用的是 DeepSeek（见上表）。
 
 ## 第一次部署（共用服务器）
 
@@ -64,7 +64,7 @@ app 负责 API、`/mcp` 和店铺网页，Postgres 存数据，另有一个服�
 ```bash
 ssh root@<服务器 IP>
 mkdir -p /opt/openshop && cd /opt/openshop
-# 照 deploy/.env.example 写 .env：COMPOSE_FILE、OPENSHOP_DOMAIN、POSTGRES_PASSWORD、PREVIEW_SECRET、VAPID_*、ANTHROPIC_API_KEY
+# 照 deploy/.env.example 写 .env：COMPOSE_FILE、OPENSHOP_DOMAIN、POSTGRES_PASSWORD、PREVIEW_SECRET、VAPID_*、DEEPSEEK_API_KEY
 vi .env
 ```
 
