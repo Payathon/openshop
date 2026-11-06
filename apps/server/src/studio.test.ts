@@ -138,6 +138,15 @@ describe("changes and publishing", () => {
     expect(live.text.indexOf("周末 7 折")).toBeLessThan(live.text.indexOf("小美美甲</a>"));
   });
 
+  it("changes only the theme fields a patch names", async () => {
+    const t = await setup();
+    const { token } = await t.nailStudio();
+    await t.ok("POST", "/api/merchant/changes", { token, body: { kind: "theme.update", patch: { style: "beauty", font: "serif", radius: "round" } } });
+    const theme = await t.ok("POST", "/api/merchant/changes", { token, body: { kind: "theme.update", patch: { primary: "#e03131" } } });
+    expect(theme.change.summary).toBe("主色 粉→红");
+    expect((await t.ok("GET", "/api/merchant/shop", { token })).page.theme).toEqual({ style: "beauty", primary: "#e03131", font: "serif", radius: "round" });
+  });
+
   it("undoes a change together with later changes built on it", async () => {
     const t = await setup();
     const { token } = await t.nailStudio();

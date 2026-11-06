@@ -7,7 +7,7 @@ import {
   productInputSchema,
   sectionLabel,
   STYLES,
-  themeSchema,
+  themePatchSchema,
   type CancelPolicy,
   type Fulfillment,
   type OpeningHours,
@@ -88,7 +88,7 @@ const sectionInput = z.object({
 
 export const opInputSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("shop.update"), patch: shopPatchSchema }),
-  z.object({ kind: z.literal("theme.update"), patch: themeSchema.partial() }),
+  z.object({ kind: z.literal("theme.update"), patch: themePatchSchema }),
   // Without an index, a new section goes just above 联系方式.
   z.object({ kind: z.literal("section.add"), section: sectionInput, index: z.number().int().nonnegative().optional() }),
   z.object({ kind: z.literal("section.update"), id: z.string(), props: z.record(z.string(), z.unknown()) }),

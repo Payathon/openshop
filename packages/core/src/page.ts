@@ -141,13 +141,22 @@ export const STYLE_KEYS = Object.keys(STYLES) as [Style, ...Style[]];
 // A template with its own font and corners, for switching templates in one change.
 export const styleTheme = (style: Style): Pick<Theme, "style" | "font" | "radius"> => ({ style, font: STYLES[style].font, radius: STYLES[style].radius });
 
+const themeFields = {
+  style: z.enum(STYLE_KEYS),
+  primary: z.string().regex(/^#[0-9a-fA-F]{6}$/, "主色必须是 #RRGGBB 格式"),
+  font: z.enum(["system", "rounded", "serif"]),
+  radius: z.enum(["square", "soft", "round"]),
+};
 export const themeSchema = z.object({
-  style: z.enum(STYLE_KEYS).default("minimal"),
-  primary: z.string().regex(/^#[0-9a-fA-F]{6}$/, "主色必须是 #RRGGBB 格式").default("#d6336c"),
-  font: z.enum(["system", "rounded", "serif"]).default("system"),
-  radius: z.enum(["square", "soft", "round"]).default("soft"),
+  style: themeFields.style.default("minimal"),
+  primary: themeFields.primary.default("#d6336c"),
+  font: themeFields.font.default("system"),
+  radius: themeFields.radius.default("soft"),
 });
 export type Theme = z.infer<typeof themeSchema>;
+// A change to some theme fields. Not themeSchema.partial(): its defaults would fill in, and
+// overwrite, every field the patch leaves out.
+export const themePatchSchema = z.object(themeFields).partial();
 
 export interface PageConfig {
   sections: Section[];
