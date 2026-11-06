@@ -1,7 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { and, asc, desc, eq, inArray, notInArray } from "drizzle-orm";
 import { defaultPage, MODULE_KEYS, parsePage, TEMPLATES, templatePage, templateSamples, type Module, type PageConfig, type Style } from "@openshop/core";
-import { applyOp, describeOp, fromInput, opTarget, resolveOp, type Content, type Op, type OpInput, type ProductContent } from "./content.ts";
+import { applyOp, describeOp, json, fromInput, opTarget, resolveOp, type Content, type Op, type OpInput, type ProductContent } from "./content.ts";
 import type { Db } from "./db/client.ts";
 import { changesetOps, changesets, products, publishes, shopPages, shops, variants, type StoredSchedule } from "./db/schema.ts";
 import { newId, ShopError, type OpenShop } from "./shop.ts";
@@ -15,7 +15,6 @@ type OpRow = typeof changesetOps.$inferSelect;
 
 const PREVIEW_TTL_MS = 24 * 3_600_000;
 
-const json = (x: unknown) => JSON.stringify(x);
 // Content equality ignoring stock, which is operational and never published.
 const sameProduct = (a: ProductContent, b: ProductContent) =>
   json({ ...a, variants: a.variants.map((v) => ({ ...v, stock: null })) }) === json({ ...b, variants: b.variants.map((v) => ({ ...v, stock: null })) });

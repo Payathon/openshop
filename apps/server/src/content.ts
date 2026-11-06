@@ -277,7 +277,12 @@ export function applyOp(c: Content, op: Op): Content {
 // ---- change lists ------------------------------------------------------------------------
 
 const yuan = (fen: number) => `¥${fen % 100 === 0 ? fen / 100 : (fen / 100).toFixed(2)}`;
-const json = (x: unknown) => JSON.stringify(x);
+// JSON with object keys sorted, for comparing content: Postgres jsonb reorders keys, so content
+// read back from the database and the same content from a request differ in key order.
+export const json = (x: unknown) =>
+  JSON.stringify(x, (_, v: unknown) =>
+    v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : v,
+  );
 const quote = (s: Section) => {
   const title = "title" in s.props && typeof s.props.title === "string" && s.props.title ? `：${s.props.title}` : "";
   return `「${sectionLabel(s.type)}」${title}`;

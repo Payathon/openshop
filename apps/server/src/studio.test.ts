@@ -138,6 +138,23 @@ describe("changes and publishing", () => {
     expect(live.text.indexOf("周末 7 折")).toBeLessThan(live.text.indexOf("小美美甲</a>"));
   });
 
+  it("does not report fields that come back unchanged", async () => {
+    const t = await setup();
+    const { token, product } = await t.nailStudio();
+    // As the workbench sends it: same options, keys in another order than the database keeps them.
+    const edit = await t.ok("PUT", `/api/merchant/products/${product.id}`, {
+      token,
+      body: {
+        name: "法式美甲",
+        fulfillment: "booking",
+        durationMinutes: 90,
+        orderOptions: [{ key: "color", label: "颜色", type: "choice", choices: ["裸粉", "酒红"], required: true }],
+        variants: [{ priceFen: 18800 }],
+      },
+    });
+    expect(edit.change.summary).toBe("法式美甲 ¥168→¥188");
+  });
+
   it("changes only the theme fields a patch names", async () => {
     const t = await setup();
     const { token } = await t.nailStudio();
