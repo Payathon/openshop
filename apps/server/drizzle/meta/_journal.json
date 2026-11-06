@@ -43,6 +43,13 @@
       "when": 1793662888773,
       "tag": "0005_plan_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793939278709,
+      "tag": "0006_push_subscriptions",
+      "breakpoints": true
     }
   ]
 }

@@ -92,6 +92,9 @@ export const orders = pgTable(
     trackingNo: text("tracking_no"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     paidAt: timestamp("paid_at", { withTimezone: true }),
+    // When the merchant's browsers were told about the new order (push.ts). Claimed atomically
+    // after payment, so an order notifies at most once whichever instance confirms it.
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
   },
   (t) => [index("orders_shop_status_idx").on(t.shopId, t.status)],
 );
@@ -123,6 +126,25 @@ export const customers = pgTable(
     lastOrderAt: timestamp("last_order_at", { withTimezone: true }).notNull(),
   },
   (t) => [uniqueIndex("customers_shop_phone_idx").on(t.shopId, t.phone)],
+);
+
+// One browser that asked to hear about the shop's new orders (Web Push, push.ts). The endpoint
+// is the push service's address for that browser; signing in to another shop on the same
+// browser moves the row there.
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: text("id").primaryKey(),
+    shopId: text("shop_id").notNull().references(() => shops.id),
+    // The workbench account that turned it on; null when a merchant token did. No foreign key:
+    // accounts live in accounts.ts, which imports this file.
+    accountId: text("account_id"),
+    endpoint: text("endpoint").notNull().unique(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("push_subscriptions_shop_idx").on(t.shopId)],
 );
 
 // ---- billing: merchants paying OpenShop for 专业版 ---------------------------
